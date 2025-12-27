@@ -73,6 +73,19 @@ const setLoading = (isLoading) => {
   submitBtn.disabled = isLoading;
 };
 
+const renderMath = (element) => {
+  if (!window.renderMathInElement) return;
+  window.renderMathInElement(element, {
+    delimiters: [
+      { left: "$$", right: "$$", display: true },
+      { left: "\\[", right: "\\]", display: true },
+      { left: "$", right: "$", display: false },
+      { left: "\\(", right: "\\)", display: false },
+    ],
+    throwOnError: false,
+  });
+};
+
 const insertAtCursor = (el, text) => {
   const start = el.selectionStart ?? el.value.length;
   const end = el.selectionEnd ?? el.value.length;
@@ -136,6 +149,8 @@ const renderHistory = () => {
     card.appendChild(answer);
     historyList.appendChild(card);
   });
+
+  renderMath(historyList);
 };
 
 const addHistory = ({ prompt, answer, model, imageName }) => {
@@ -276,6 +291,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     answerBox.textContent = data.answer || "暂无返回内容。";
+    renderMath(answerBox);
     recordUsage(apiKey, data.usage);
     addHistory({
       prompt,
