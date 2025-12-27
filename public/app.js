@@ -1,5 +1,4 @@
 const form = document.getElementById("solve-form");
-const form = document.getElementById("solve-form");
 const promptInput = document.getElementById("prompt");
 const imageInput = document.getElementById("image");
 const fileName = document.getElementById("fileName");

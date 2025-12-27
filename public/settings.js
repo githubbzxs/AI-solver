@@ -1,4 +1,4 @@
-const keysInput = document.getElementById("keysInput");
+(function () {
 const keysInput = document.getElementById("keysInput");
 const saveKeysBtn = document.getElementById("saveKeysBtn");
 const clearKeysBtn = document.getElementById("clearKeysBtn");
@@ -151,3 +151,4 @@ document.addEventListener("DOMContentLoaded", () => {
   renderUsage();
   themeSelect.value = window.GeminiTheme.getThemePreference();
 });
+})();
