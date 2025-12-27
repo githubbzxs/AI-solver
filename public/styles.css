@@ -423,12 +423,22 @@ button:disabled {
   justify-content: center;
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
   transition: opacity 0.25s ease;
   z-index: 200;
 }
 
 .modal.is-open {
   opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.modal * {
+  pointer-events: none;
+}
+
+.modal.is-open * {
   pointer-events: auto;
 }
 
