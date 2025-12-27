@@ -1,4 +1,5 @@
 const keysInput = document.getElementById("keysInput");
+const keysInput = document.getElementById("keysInput");
 const saveKeysBtn = document.getElementById("saveKeysBtn");
 const clearKeysBtn = document.getElementById("clearKeysBtn");
 const keysSummary = document.getElementById("keysSummary");
