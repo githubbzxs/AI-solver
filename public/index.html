@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Homework Helper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="top-bar">
+        <span class="brand">AI Homework Helper</span>
+        <a class="settings-link" href="settings.html">Settings</a>
+      </div>
+      <header class="hero">
+        <div class="hero-text">
+          <p class="kicker">AI Homework Helper</p>
+          <h1>Snap, ask, solve.</h1>
+          <p class="lead">
+            Upload a problem image or type a question. The server calls Gemini
+            Flash and returns the answer.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="badge">Gemini Flash</div>
+          <p class="meta" id="settingsSummary">Set keys and model in Settings.</p>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel">
+          <h2>Ask a question</h2>
+          <form id="solve-form">
+            <label class="field">
+              <span>Your question</span>
+              <textarea
+                id="prompt"
+                name="prompt"
+                rows="5"
+                placeholder="Explain the steps and show the final answer."
+              ></textarea>
+            </label>
+
+            <label class="field file">
+              <span>Problem image (optional)</span>
+              <input id="image" name="image" type="file" accept="image/*" />
+              <span id="fileName" class="file-name">No image selected.</span>
+            </label>
+
+            <p class="form-note" id="settingsHint">
+              API keys and model are managed in <a href="settings.html">Settings</a>.
+            </p>
+            <button type="submit" id="submitBtn">Solve now</button>
+          </form>
+        </section>
+
+        <section class="panel output">
+          <div class="output-head">
+            <h2>Answer</h2>
+            <div class="output-actions">
+              <div id="spinner" class="spinner" hidden></div>
+              <span id="status" class="status">Idle</span>
+              <button type="button" id="copyBtn" class="ghost">Copy</button>
+            </div>
+          </div>
+          <div id="answer" class="answer">Your answer will appear here.</div>
+          <div id="error" class="error" hidden></div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Tip: You can send only text, only an image, or both.</span>
+        <span>Max image size: 10MB.</span>
+      </footer>
+    </div>
+
+    <script src="theme.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
