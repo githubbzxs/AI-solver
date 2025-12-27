@@ -11,12 +11,15 @@ const settingsHint = document.getElementById("settingsHint");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
+const historyList = document.getElementById("historyList");
+const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 
 const STORAGE = {
   keys: "gemini_api_keys",
   model: "gemini_model",
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
+  history: "gemini_history",
 };
 
 const loadKeys = () => {
@@ -41,10 +44,10 @@ const updateSettingsSummary = () => {
   const keys = loadKeys();
   const model = getModel();
   if (keys.length === 0) {
-    settingsSummary.textContent = "No keys saved. Open Settings to add API keys.";
+    settingsSummary.textContent = "未保存 Key，请去设置页添加。";
     settingsHint.classList.add("warn");
   } else {
-    settingsSummary.textContent = `Keys: ${keys.length} · Model: ${model}`;
+    settingsSummary.textContent = `Key 数量：${keys.length} · 模型：${model}`;
     settingsHint.classList.remove("warn");
   }
 };
@@ -82,6 +85,75 @@ const insertAtCursor = (el, text) => {
   el.focus();
 };
 
+const loadHistory = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE.history);
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const saveHistory = (items) => {
+  localStorage.setItem(STORAGE.history, JSON.stringify(items));
+};
+
+const renderHistory = () => {
+  const items = loadHistory();
+  historyList.innerHTML = "";
+  if (items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "暂无记录";
+    historyList.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "history-item";
+
+    const header = document.createElement("div");
+    header.className = "history-header";
+    header.textContent = `${item.time} · ${item.model || "gemini-3-flash-preview"}`;
+
+    const prompt = document.createElement("div");
+    prompt.className = "history-block";
+    prompt.textContent = `题目：${item.prompt || "（无文本）"}`;
+
+    const answer = document.createElement("div");
+    answer.className = "history-block";
+    answer.textContent = `答案：${item.answer || "（无回答）"}`;
+
+    card.appendChild(header);
+    if (item.imageName) {
+      const img = document.createElement("div");
+      img.className = "history-meta";
+      img.textContent = `图片：${item.imageName}`;
+      card.appendChild(img);
+    }
+    card.appendChild(prompt);
+    card.appendChild(answer);
+    historyList.appendChild(card);
+  });
+};
+
+const addHistory = ({ prompt, answer, model, imageName }) => {
+  const items = loadHistory();
+  const time = new Date().toLocaleString("zh-CN", { hour12: false });
+  const entry = {
+    id: Date.now(),
+    time,
+    prompt,
+    answer,
+    model,
+    imageName,
+  };
+  const updated = [entry, ...items].slice(0, 20);
+  saveHistory(updated);
+  renderHistory();
+};
+
 const recordUsage = (key, usage) => {
   const now = new Date();
   const dayKey = now.toISOString().slice(0, 10);
@@ -112,29 +184,29 @@ const recordUsage = (key, usage) => {
 
 imageInput.addEventListener("change", () => {
   const file = imageInput.files[0];
-  fileName.textContent = file ? file.name : "No image selected.";
+  fileName.textContent = file ? file.name : "未选择图片";
 });
 
 pasteBtn.addEventListener("click", async () => {
   try {
     const text = await navigator.clipboard.readText();
     if (!text) {
-      setStatus("Clipboard empty", false);
+      setStatus("剪贴板为空", false);
       return;
     }
     if (!promptInput.value.trim()) {
       promptInput.value = text;
       promptInput.focus();
-      setStatus("Pasted", false);
+      setStatus("已粘贴", false);
       return;
     }
 
     const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
     insertAtCursor(promptInput, prefix + text);
-    setStatus("Pasted", false);
+    setStatus("已粘贴", false);
   } catch (error) {
-    setStatus("Paste blocked", false);
-    errorBox.textContent = "Clipboard permission denied. Please paste manually.";
+    setStatus("粘贴受限", false);
+    errorBox.textContent = "剪贴板权限被拒绝，请手动粘贴。";
     errorBox.hidden = false;
   }
 });
@@ -144,13 +216,21 @@ copyBtn.addEventListener("click", async () => {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    setStatus("Copied", false);
+    setStatus("已复制", false);
   } catch (error) {
-    setStatus("Copy failed", false);
+    setStatus("复制失败", false);
   }
 });
 
-document.addEventListener("DOMContentLoaded", updateSettingsSummary);
+clearHistoryBtn.addEventListener("click", () => {
+  saveHistory([]);
+  renderHistory();
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  updateSettingsSummary();
+  renderHistory();
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -162,13 +242,13 @@ form.addEventListener("submit", async (event) => {
   const file = imageInput.files[0];
 
   if (!prompt && !file) {
-    errorBox.textContent = "Please type a question or attach an image.";
+    errorBox.textContent = "请填写题目或上传图片。";
     errorBox.hidden = false;
     return;
   }
 
   if (keys.length === 0) {
-    errorBox.textContent = "No API keys saved. Open Settings to add keys.";
+    errorBox.textContent = "未保存 API Key，请先在设置页添加。";
     errorBox.hidden = false;
     return;
   }
@@ -181,8 +261,8 @@ form.addEventListener("submit", async (event) => {
   if (file) formData.append("image", file);
 
   setLoading(true);
-  answerBox.textContent = "Thinking...";
-  setStatus(`Working (${maskKey(apiKey)})`, true);
+  answerBox.textContent = "正在解答，请稍候...";
+  setStatus(`处理中（${maskKey(apiKey)}）`, true);
 
   try {
     const response = await fetch("/api/solve", {
@@ -192,17 +272,23 @@ form.addEventListener("submit", async (event) => {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "Request failed.");
+      throw new Error(data.error || "请求失败。");
     }
 
-    answerBox.textContent = data.answer || "No answer returned.";
+    answerBox.textContent = data.answer || "暂无返回内容。";
     recordUsage(apiKey, data.usage);
-    setStatus("Done", false);
+    addHistory({
+      prompt,
+      answer: data.answer,
+      model: data.model,
+      imageName: file ? file.name : "",
+    });
+    setStatus("完成", false);
   } catch (error) {
-    answerBox.textContent = "No answer.";
+    answerBox.textContent = "暂无答案。";
     errorBox.textContent = error.message;
     errorBox.hidden = false;
-    setStatus("Error", false);
+    setStatus("错误", false);
   } finally {
     setLoading(false);
   }

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Settings · AI Homework Helper</title>
+    <title>设置 · AI 作业帮</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,33 +15,31 @@
   <body>
     <div class="page">
       <div class="top-bar">
-        <span class="brand">AI Homework Helper</span>
-        <a class="settings-link" href="index.html">Back to Ask</a>
+        <span class="brand">AI 作业帮</span>
+        <a class="settings-link" href="index.html">返回提问</a>
       </div>
 
       <header class="hero compact">
         <div class="hero-text">
-          <p class="kicker">Settings</p>
-          <h1>Keys, model, and theme.</h1>
+          <p class="kicker">设置</p>
+          <h1>API Key、模型与主题</h1>
           <p class="lead">
-            Store multiple API keys for round-robin usage and track daily
-            request usage.
+            支持保存多个 API Key 轮询调用，并统计每日用量。
           </p>
         </div>
         <div class="hero-card">
-          <div class="badge">Local only</div>
+          <div class="badge">仅本地保存</div>
           <p class="meta">
-            Keys and usage stats are saved in your browser storage and never sent
-            anywhere except the Gemini API request you initiate.
+            Key 与用量仅保存在浏览器本地，只会随你的请求发送到 Gemini API。
           </p>
         </div>
       </header>
 
       <main class="grid settings-grid">
         <section class="panel">
-          <h2>API keys</h2>
+          <h2>API Key</h2>
           <label class="field">
-            <span>One key per line</span>
+            <span>每行一个 Key</span>
             <textarea
               id="keysInput"
               rows="6"
@@ -49,45 +47,45 @@
             ></textarea>
           </label>
           <div class="panel-actions">
-            <button type="button" id="saveKeysBtn">Save keys</button>
-            <button type="button" id="clearKeysBtn" class="ghost">Clear</button>
+            <button type="button" id="saveKeysBtn">保存</button>
+            <button type="button" id="clearKeysBtn" class="ghost">清空</button>
           </div>
-          <div class="hint" id="keysSummary">No keys saved.</div>
+          <div class="hint" id="keysSummary">暂无 Key。</div>
           <div id="keyList" class="key-list"></div>
         </section>
 
         <section class="panel">
-          <h2>Model</h2>
+          <h2>模型</h2>
           <label class="field">
-            <span>Model ID</span>
+            <span>模型 ID</span>
             <input id="modelInput" type="text" placeholder="gemini-3-flash-preview" />
           </label>
           <div class="panel-actions">
-            <button type="button" id="saveModelBtn">Save model</button>
+            <button type="button" id="saveModelBtn">保存</button>
           </div>
-          <div class="hint" id="modelHint">Default: gemini-3-flash-preview</div>
+          <div class="hint" id="modelHint">默认：gemini-3-flash-preview</div>
         </section>
 
         <section class="panel">
-          <h2>Daily usage</h2>
-          <div class="usage-summary" id="usageSummary">No usage yet today.</div>
+          <h2>今日用量</h2>
+          <div class="usage-summary" id="usageSummary">今天还没有记录。</div>
           <div class="usage-list" id="usageList"></div>
           <div class="panel-actions">
-            <button type="button" id="resetUsageBtn" class="ghost">Reset today</button>
+            <button type="button" id="resetUsageBtn" class="ghost">清空今日</button>
           </div>
         </section>
 
         <section class="panel">
-          <h2>Theme</h2>
+          <h2>主题</h2>
           <label class="field">
-            <span>Color mode</span>
+            <span>颜色模式</span>
             <select id="themeSelect">
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
             </select>
           </label>
-          <div class="hint">Theme applies to all pages.</div>
+          <div class="hint">主题对所有页面生效。</div>
         </section>
       </main>
     </div>

@@ -54,14 +54,14 @@ const renderKeys = () => {
   keysInput.value = keys.join("\n");
 
   if (keys.length === 0) {
-    keysSummary.textContent = "No keys saved.";
+    keysSummary.textContent = "暂无 Key。";
   } else {
     const rawIndex = Number.parseInt(
       localStorage.getItem(STORAGE.keyIndex) || "0",
       10
     );
     const nextIndex = Number.isNaN(rawIndex) ? 0 : rawIndex % keys.length;
-    keysSummary.textContent = `Saved ${keys.length} keys. Next: ${maskKey(
+    keysSummary.textContent = `已保存 ${keys.length} 个 Key，下一个：${maskKey(
       keys[nextIndex]
     )}`;
   }
@@ -78,7 +78,7 @@ const renderKeys = () => {
 const renderModel = () => {
   const stored = localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
   modelInput.value = stored;
-  modelHint.textContent = `Current: ${stored}`;
+  modelHint.textContent = `当前：${stored}`;
 };
 
 const renderUsage = () => {
@@ -94,16 +94,16 @@ const renderUsage = () => {
 
   const today = store[dayKey];
   if (!today) {
-    usageSummary.textContent = "No usage yet today.";
+    usageSummary.textContent = "今天还没有记录。";
     return;
   }
 
-  usageSummary.textContent = `Requests: ${today.requests} · Tokens: ${today.tokens}`;
+  usageSummary.textContent = `请求数：${today.requests} · Tokens：${today.tokens}`;
 
   Object.entries(today.perKey || {}).forEach(([key, stats]) => {
     const row = document.createElement("div");
     row.className = "usage-row";
-    row.textContent = `${key} · ${stats.requests} req · ${stats.tokens} tokens`;
+    row.textContent = `${key} · ${stats.requests} 次 · ${stats.tokens} tokens`;
     usageList.appendChild(row);
   });
 };
