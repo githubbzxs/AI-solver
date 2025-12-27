@@ -38,6 +38,10 @@ body {
   min-height: 100vh;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .top-bar {
   display: flex;
   justify-content: space-between;
@@ -293,6 +297,16 @@ button:disabled {
   font-weight: 600;
 }
 
+.text-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .output-head {
   display: flex;
   justify-content: space-between;
@@ -401,8 +415,84 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.is-collapsed {
-  display: none;
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 200;
+}
+
+.modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 14, 18, 0.45);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.modal.is-open .modal-backdrop {
+  opacity: 1;
+}
+
+.modal-card {
+  position: relative;
+  width: min(960px, 92vw);
+  max-height: 86vh;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow);
+  transform: translateY(16px) scale(0.98);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  z-index: 2;
+}
+
+.modal.is-open .modal-card {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin: 0 0 6px;
+}
+
+.modal-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-body {
+  padding: 20px 24px 26px;
+  overflow: auto;
+  max-height: calc(86vh - 84px);
 }
 
 .error {
@@ -510,6 +600,10 @@ body[data-theme="dark"] .file-ui,
 body[data-theme="dark"] .history-item,
 body[data-theme="dark"] .history-block {
   background: rgba(23, 26, 32, 0.9);
+}
+
+body[data-theme="dark"] .modal-card {
+  background: rgba(20, 23, 28, 0.96);
 }
 
 body[data-theme="dark"] .field input,

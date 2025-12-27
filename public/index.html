@@ -23,14 +23,7 @@
         <span class="brand">AI-solver</span>
         <div class="top-actions">
           <button type="button" id="historyToggle" class="ghost large">历史解答</button>
-          <a
-            class="settings-link large"
-            href="settings.html"
-            target="_blank"
-            rel="noopener"
-          >
-            设置
-          </a>
+          <button type="button" id="settingsToggle" class="ghost large">设置</button>
         </div>
       </div>
 
@@ -62,7 +55,8 @@
 
             <p class="form-note" id="settingsHint">
               API Key 与模型在
-              <a href="settings.html" target="_blank" rel="noopener">设置</a> 中管理。
+              <button type="button" class="text-link" data-open="settings">设置</button>
+              中管理。
             </p>
             <button type="submit" id="submitBtn">开始解答</button>
           </form>
@@ -87,18 +81,98 @@
           </div>
         </section>
 
-        <section class="panel history" id="historyPanel">
-          <div class="output-head">
+      </main>
+    </div>
+
+    <div class="modal" id="historyModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="history"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
             <h2>历史解答</h2>
-            <div class="output-actions">
-              <button type="button" id="clearHistoryBtn" class="ghost">清空</button>
-            </div>
+            <p class="modal-sub">点击条目查看详情</p>
           </div>
+          <div class="modal-actions">
+            <button type="button" id="clearHistoryBtn" class="ghost small">清空</button>
+            <button type="button" class="ghost small" data-close="history">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
           <div id="historyList" class="history-list">
             <div class="history-empty">暂无记录</div>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="settingsModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="settings"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>设置</h2>
+            <p class="modal-sub">管理 Key、模型、主题与用量</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="settings">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="grid settings-grid">
+            <section class="panel">
+              <h2>API Key</h2>
+              <label class="field">
+                <span>每行一个 Key</span>
+                <textarea
+                  id="keysInput"
+                  rows="6"
+                  placeholder="AIza...&#10;AIza..."
+                ></textarea>
+              </label>
+              <div class="panel-actions">
+                <button type="button" id="saveKeysBtn">保存</button>
+                <button type="button" id="clearKeysBtn" class="ghost">清空</button>
+              </div>
+              <div class="hint" id="keysSummary">暂无 Key。</div>
+              <div id="keyList" class="key-list"></div>
+            </section>
+
+            <section class="panel">
+              <h2>模型</h2>
+              <label class="field">
+                <span>模型 ID</span>
+                <input id="modelInput" type="text" placeholder="gemini-3-flash-preview" />
+              </label>
+              <div class="panel-actions">
+                <button type="button" id="saveModelBtn">保存</button>
+              </div>
+              <div class="hint" id="modelHint">默认：gemini-3-flash-preview</div>
+            </section>
+
+            <section class="panel">
+              <h2>今日用量</h2>
+              <div class="usage-summary" id="usageSummary">今天还没有记录。</div>
+              <div class="usage-list" id="usageList"></div>
+              <div class="panel-actions">
+                <button type="button" id="resetUsageBtn" class="ghost">清空今日</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>主题</h2>
+              <label class="field">
+                <span>颜色模式</span>
+                <select id="themeSelect">
+                  <option value="system">跟随系统</option>
+                  <option value="light">浅色</option>
+                  <option value="dark">深色</option>
+                </select>
+              </label>
+              <div class="hint">主题对所有页面生效。</div>
+            </section>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="theme.js"></script>
@@ -107,6 +181,7 @@
       defer
       src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
     ></script>
+    <script src="settings.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

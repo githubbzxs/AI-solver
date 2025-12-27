@@ -15,7 +15,9 @@ const pasteBtn = document.getElementById("pasteBtn");
 const historyList = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const historyToggle = document.getElementById("historyToggle");
-const historyPanel = document.getElementById("historyPanel");
+const settingsToggle = document.getElementById("settingsToggle");
+const historyModal = document.getElementById("historyModal");
+const settingsModal = document.getElementById("settingsModal");
 
 const STORAGE = {
   keys: "gemini_api_keys",
@@ -262,17 +264,52 @@ errorToggle.addEventListener("click", () => {
   errorToggle.textContent = isHidden ? "隐藏详情" : "查看详情";
 });
 
+const openModal = (modal) => {
+  if (!modal) return;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+};
+
+const closeModal = (modal) => {
+  if (!modal) return;
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+};
+
 historyToggle.addEventListener("click", () => {
-  historyPanel.classList.toggle("is-collapsed");
-  historyToggle.textContent = historyPanel.classList.contains("is-collapsed")
-    ? "历史解答"
-    : "收起历史";
+  openModal(historyModal);
+});
+
+settingsToggle.addEventListener("click", () => {
+  openModal(settingsModal);
+});
+
+document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    openModal(settingsModal);
+  });
+});
+
+document.querySelectorAll("[data-close=\"history\"]").forEach((btn) => {
+  btn.addEventListener("click", () => closeModal(historyModal));
+});
+
+document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
+  btn.addEventListener("click", () => closeModal(settingsModal));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeModal(historyModal);
+  closeModal(settingsModal);
 });
 
 document.addEventListener("DOMContentLoaded", () => {
   updateSettingsSummary();
   renderHistory();
-  historyPanel.classList.add("is-collapsed");
 });
 
 form.addEventListener("submit", async (event) => {
