@@ -5,14 +5,17 @@ const fileName = document.getElementById("fileName");
 const statusTag = document.getElementById("status");
 const answerBox = document.getElementById("answer");
 const errorBox = document.getElementById("error");
+const errorToggle = document.getElementById("errorToggle");
+const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
-const settingsSummary = document.getElementById("settingsSummary");
 const settingsHint = document.getElementById("settingsHint");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
 const historyList = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+const historyToggle = document.getElementById("historyToggle");
+const historyPanel = document.getElementById("historyPanel");
 
 const STORAGE = {
   keys: "gemini_api_keys",
@@ -44,11 +47,11 @@ const updateSettingsSummary = () => {
   const keys = loadKeys();
   const model = getModel();
   if (keys.length === 0) {
-    settingsSummary.textContent = "未保存 Key，请去设置页添加。";
     settingsHint.classList.add("warn");
+    settingsHint.textContent = "未保存 Key，请在设置中添加。";
   } else {
-    settingsSummary.textContent = `Key 数量：${keys.length} · 模型：${model}`;
     settingsHint.classList.remove("warn");
+    settingsHint.textContent = `Key 数量：${keys.length} · 模型：${model}`;
   }
 };
 
@@ -123,12 +126,21 @@ const renderHistory = () => {
   }
 
   items.forEach((item) => {
-    const card = document.createElement("div");
+    const card = document.createElement("details");
     card.className = "history-item";
 
-    const header = document.createElement("div");
-    header.className = "history-header";
-    header.textContent = `${item.time} · ${item.model || "gemini-3-flash-preview"}`;
+    const summary = document.createElement("summary");
+    summary.className = "history-summary";
+
+    const summaryLeft = document.createElement("span");
+    summaryLeft.textContent = `${item.time} · ${item.model || "gemini-3-flash-preview"}`;
+
+    const summaryRight = document.createElement("span");
+    summaryRight.className = "history-open";
+    summaryRight.textContent = "查看详情";
+
+    summary.appendChild(summaryLeft);
+    summary.appendChild(summaryRight);
 
     const prompt = document.createElement("div");
     prompt.className = "history-block";
@@ -138,7 +150,7 @@ const renderHistory = () => {
     answer.className = "history-block";
     answer.textContent = `答案：${item.answer || "（无回答）"}`;
 
-    card.appendChild(header);
+    card.appendChild(summary);
     if (item.imageName) {
       const img = document.createElement("div");
       img.className = "history-meta";
@@ -221,7 +233,9 @@ pasteBtn.addEventListener("click", async () => {
     setStatus("已粘贴", false);
   } catch (error) {
     setStatus("粘贴受限", false);
-    errorBox.textContent = "剪贴板权限被拒绝，请手动粘贴。";
+    errorDetails.textContent = "剪贴板权限被拒绝，请手动粘贴。";
+    errorDetails.hidden = true;
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
   }
 });
@@ -242,14 +256,31 @@ clearHistoryBtn.addEventListener("click", () => {
   renderHistory();
 });
 
+errorToggle.addEventListener("click", () => {
+  const isHidden = errorDetails.hidden;
+  errorDetails.hidden = !isHidden;
+  errorToggle.textContent = isHidden ? "隐藏详情" : "查看详情";
+});
+
+historyToggle.addEventListener("click", () => {
+  historyPanel.classList.toggle("is-collapsed");
+  historyToggle.textContent = historyPanel.classList.contains("is-collapsed")
+    ? "历史解答"
+    : "收起历史";
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   updateSettingsSummary();
   renderHistory();
+  historyPanel.classList.add("is-collapsed");
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorBox.hidden = true;
+  errorDetails.textContent = "";
+  errorDetails.hidden = true;
+  errorToggle.textContent = "查看详情";
 
   const keys = loadKeys();
   const model = getModel();
@@ -257,13 +288,17 @@ form.addEventListener("submit", async (event) => {
   const file = imageInput.files[0];
 
   if (!prompt && !file) {
-    errorBox.textContent = "请填写题目或上传图片。";
+    errorDetails.textContent = "请填写题目或上传图片。";
+    errorDetails.hidden = true;
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
     return;
   }
 
   if (keys.length === 0) {
-    errorBox.textContent = "未保存 API Key，请先在设置页添加。";
+    errorDetails.textContent = "未保存 API Key，请先在设置页添加。";
+    errorDetails.hidden = true;
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
     return;
   }
@@ -302,7 +337,9 @@ form.addEventListener("submit", async (event) => {
     setStatus("完成", false);
   } catch (error) {
     answerBox.textContent = "暂无答案。";
-    errorBox.textContent = error.message;
+    errorDetails.textContent = error.message;
+    errorDetails.hidden = true;
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
     setStatus("错误", false);
   } finally {

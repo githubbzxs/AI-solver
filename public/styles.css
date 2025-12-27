@@ -46,11 +46,17 @@ body {
 }
 
 .brand {
-  font-size: 0.78rem;
+  font-size: 1.1rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
+}
+
+.top-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .settings-link {
@@ -61,6 +67,12 @@ body {
   border-radius: 999px;
   font-size: 0.85rem;
   background: var(--card);
+}
+
+.settings-link.large {
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .page {
@@ -275,6 +287,12 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.ghost.large {
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .output-head {
   display: flex;
   justify-content: space-between;
@@ -340,10 +358,28 @@ button:disabled {
   gap: 10px;
 }
 
-.history-header {
+.history-item[open] .history-open {
+  color: var(--accent-2);
+}
+
+.history-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.history-summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-open {
   font-size: 0.85rem;
   color: var(--muted);
-  letter-spacing: 0.02em;
 }
 
 .history-meta {
@@ -365,12 +401,31 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.is-collapsed {
+  display: none;
+}
+
 .error {
   margin-top: 12px;
   color: #9b1c1c;
   background: #fff0f0;
   border-radius: 12px;
   padding: 10px 12px;
+}
+
+.error-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.error-details {
+  margin-top: 8px;
+  color: #7a1a1a;
+  font-size: 0.88rem;
+  white-space: pre-wrap;
 }
 
 .panel-actions {
@@ -483,6 +538,16 @@ body[data-theme="dark"] .ghost {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .top-actions {
+    width: 100%;
+  }
+
+  .top-actions .ghost.large,
+  .top-actions .settings-link.large {
+    width: 100%;
+    text-align: center;
   }
 
   .output-head {

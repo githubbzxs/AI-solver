@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 作业帮</title>
+    <title>AI-solver</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,22 +20,19 @@
   <body>
     <div class="page">
       <div class="top-bar">
-        <span class="brand">AI 作业帮</span>
-        <a class="settings-link" href="settings.html" target="_blank" rel="noopener">设置</a>
+        <span class="brand">AI-solver</span>
+        <div class="top-actions">
+          <button type="button" id="historyToggle" class="ghost large">历史解答</button>
+          <a
+            class="settings-link large"
+            href="settings.html"
+            target="_blank"
+            rel="noopener"
+          >
+            设置
+          </a>
+        </div>
       </div>
-      <header class="hero">
-        <div class="hero-text">
-          <p class="kicker">AI 作业帮</p>
-          <h1>拍题、提问、秒解。</h1>
-          <p class="lead">
-            上传题目图片或输入文字，后台调用 Gemini Flash 返回答案。
-          </p>
-        </div>
-        <div class="hero-card">
-          <div class="badge">Gemini Flash</div>
-          <p class="meta" id="settingsSummary">在设置页管理 Key 和模型。</p>
-        </div>
-      </header>
 
       <main class="grid">
         <section class="panel">
@@ -81,10 +78,16 @@
             </div>
           </div>
           <div id="answer" class="answer">答案会显示在这里。</div>
-          <div id="error" class="error" hidden></div>
+          <div id="error" class="error" hidden>
+            <div class="error-row">
+              <span>发生错误</span>
+              <button type="button" id="errorToggle" class="ghost small">查看详情</button>
+            </div>
+            <div id="errorDetails" class="error-details" hidden></div>
+          </div>
         </section>
 
-        <section class="panel history">
+        <section class="panel history" id="historyPanel">
           <div class="output-head">
             <h2>历史解答</h2>
             <div class="output-actions">
@@ -96,11 +99,6 @@
           </div>
         </section>
       </main>
-
-      <footer class="footer">
-        <span>提示：支持纯文字、纯图片或文字+图片混合提问。</span>
-        <span>图片大小上限：10MB。</span>
-      </footer>
     </div>
 
     <script src="theme.js"></script>
