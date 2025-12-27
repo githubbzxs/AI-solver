@@ -156,6 +156,13 @@ body {
   font-size: 0.95rem;
 }
 
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .field input,
 .field textarea,
 .field select {
@@ -229,6 +236,11 @@ button:disabled {
 
 .ghost:hover {
   box-shadow: none;
+}
+
+.ghost.small {
+  padding: 6px 12px;
+  font-size: 0.9rem;
 }
 
 .output-head {

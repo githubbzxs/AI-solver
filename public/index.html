@@ -16,7 +16,7 @@
     <div class="page">
       <div class="top-bar">
         <span class="brand">AI Homework Helper</span>
-        <a class="settings-link" href="settings.html">Settings</a>
+        <a class="settings-link" href="settings.html" target="_blank" rel="noopener">Settings</a>
       </div>
       <header class="hero">
         <div class="hero-text">
@@ -38,7 +38,10 @@
           <h2>Ask a question</h2>
           <form id="solve-form">
             <label class="field">
-              <span>Your question</span>
+              <div class="field-row">
+                <span>Your question</span>
+                <button type="button" id="pasteBtn" class="ghost small">Paste</button>
+              </div>
               <textarea
                 id="prompt"
                 name="prompt"
@@ -54,7 +57,8 @@
             </label>
 
             <p class="form-note" id="settingsHint">
-              API keys and model are managed in <a href="settings.html">Settings</a>.
+              API keys and model are managed in
+              <a href="settings.html" target="_blank" rel="noopener">Settings</a>.
             </p>
             <button type="submit" id="submitBtn">Solve now</button>
           </form>

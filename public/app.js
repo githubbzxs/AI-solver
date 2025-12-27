@@ -10,6 +10,7 @@ const settingsSummary = document.getElementById("settingsSummary");
 const settingsHint = document.getElementById("settingsHint");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
+const pasteBtn = document.getElementById("pasteBtn");
 
 const STORAGE = {
   keys: "gemini_api_keys",
@@ -69,6 +70,18 @@ const setLoading = (isLoading) => {
   submitBtn.disabled = isLoading;
 };
 
+const insertAtCursor = (el, text) => {
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? el.value.length;
+  const before = el.value.slice(0, start);
+  const after = el.value.slice(end);
+  el.value = before + text + after;
+  const next = start + text.length;
+  el.selectionStart = next;
+  el.selectionEnd = next;
+  el.focus();
+};
+
 const recordUsage = (key, usage) => {
   const now = new Date();
   const dayKey = now.toISOString().slice(0, 10);
@@ -100,6 +113,30 @@ const recordUsage = (key, usage) => {
 imageInput.addEventListener("change", () => {
   const file = imageInput.files[0];
   fileName.textContent = file ? file.name : "No image selected.";
+});
+
+pasteBtn.addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) {
+      setStatus("Clipboard empty", false);
+      return;
+    }
+    if (!promptInput.value.trim()) {
+      promptInput.value = text;
+      promptInput.focus();
+      setStatus("Pasted", false);
+      return;
+    }
+
+    const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
+    insertAtCursor(promptInput, prefix + text);
+    setStatus("Pasted", false);
+  } catch (error) {
+    setStatus("Paste blocked", false);
+    errorBox.textContent = "Clipboard permission denied. Please paste manually.";
+    errorBox.hidden = false;
+  }
 });
 
 copyBtn.addEventListener("click", async () => {
