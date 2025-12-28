@@ -34,6 +34,10 @@ body[data-theme="dark"] {
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
@@ -830,7 +834,7 @@ body[data-theme="dark"] .error-details {
 
 @media (max-width: 720px) {
   .page {
-    padding: 32px 18px calc(64px + env(safe-area-inset-bottom));
+    padding: 32px 18px calc(96px + env(safe-area-inset-bottom));
   }
 
   .hero-card {
@@ -845,6 +849,32 @@ body[data-theme="dark"] .error-details {
   .brand {
     font-size: 0.95rem;
     letter-spacing: 0.22em;
+  }
+
+  .grid {
+    gap: 16px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .textarea-wrap textarea {
+    min-height: 120px;
+  }
+
+  .dropzone {
+    min-height: 110px;
+    padding: 14px;
+  }
+
+  .preview-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .preview-meta .icon-button {
+    align-self: flex-end;
   }
 
   .output-head {
