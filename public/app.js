@@ -101,6 +101,23 @@ const insertAtCursor = (el, text) => {
   el.focus();
 };
 
+const applyPaste = (text) => {
+  if (!text) {
+    setStatus("剪贴板为空", false);
+    return;
+  }
+  if (!promptInput.value.trim()) {
+    promptInput.value = text;
+    promptInput.focus();
+    setStatus("已粘贴", false);
+    return;
+  }
+
+  const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
+  insertAtCursor(promptInput, prefix + text);
+  setStatus("已粘贴", false);
+};
+
 const loadHistory = () => {
   try {
     const raw = localStorage.getItem(STORAGE.history);
@@ -255,24 +272,14 @@ removeImageBtn.addEventListener("click", (event) => {
   updateDropzone();
 });
 
+promptInput.addEventListener("paste", (event) => {
+  const text = event.clipboardData?.getData("text/plain");
+  if (!text) return;
+  event.preventDefault();
+  applyPaste(text);
+});
+
 pasteBtn.addEventListener("click", async () => {
-  const applyPaste = (text) => {
-    if (!text) {
-      setStatus("剪贴板为空", false);
-      return;
-    }
-    if (!promptInput.value.trim()) {
-      promptInput.value = text;
-      promptInput.focus();
-      setStatus("已粘贴", false);
-      return;
-    }
-
-    const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
-    insertAtCursor(promptInput, prefix + text);
-    setStatus("已粘贴", false);
-  };
-
   try {
     const text = await navigator.clipboard.readText();
     applyPaste(text);

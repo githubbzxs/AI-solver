@@ -243,7 +243,7 @@ body.modal-open {
 .textarea-wrap textarea {
   width: 100%;
   display: block;
-  padding: 16px 64px 16px 14px;
+  padding: 16px 56px 16px 14px;
   min-height: 140px;
 }
 
@@ -252,19 +252,6 @@ body.modal-open {
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  height: 28px;
-  padding: 0 12px;
-  width: auto;
-  min-width: 0;
-  border-radius: 999px;
-  border: 1px solid var(--outline);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-  box-shadow: none;
-  white-space: nowrap;
 }
 
 .field input,
@@ -479,13 +466,6 @@ button:disabled {
   box-shadow: none;
 }
 
-.paste-button:hover {
-  transform: translateY(-50%);
-  box-shadow: none;
-  color: var(--ink);
-  border-color: var(--line);
-}
-
 .icon-button svg {
   width: 18px;
   height: 18px;
@@ -497,9 +477,20 @@ button:disabled {
 }
 
 .icon-button.paste-button {
-  width: auto;
-  height: auto;
-  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--outline);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.icon-button.paste-button:hover {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .output-head {
@@ -909,14 +900,16 @@ body[data-theme="dark"] .error-details {
 
   .textarea-wrap textarea {
     min-height: 120px;
-    padding: 14px 56px 14px 12px;
+    padding: 14px 48px 14px 12px;
   }
 
   .paste-button {
     right: 6px;
-    height: 26px;
-    padding: 0 10px;
-    font-size: 0.7rem;
+  }
+
+  .icon-button.paste-button {
+    width: 30px;
+    height: 30px;
   }
 
   .dropzone {

@@ -71,11 +71,14 @@
                 <button
                   type="button"
                   id="pasteBtn"
-                  class="paste-button"
+                  class="icon-button ghost paste-button"
                   aria-label="一键粘贴"
                   title="一键粘贴"
                 >
-                  粘贴
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+                    <path d="M9 4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"></path>
+                  </svg>
                 </button>
               </div>
             </label>
@@ -147,7 +150,6 @@
             <p class="modal-sub">点击条目查看详情</p>
           </div>
           <div class="modal-actions">
-            <button type="button" id="clearHistoryBtn" class="ghost small">清空</button>
             <button type="button" class="ghost small" data-close="history">关闭</button>
           </div>
         </div>
@@ -213,6 +215,14 @@
               <div class="usage-list" id="usageList"></div>
               <div class="panel-actions">
                 <button type="button" id="resetUsageBtn" class="ghost">清空今日</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>历史记录</h2>
+              <div class="hint" id="historySummary">暂无历史记录。</div>
+              <div class="panel-actions">
+                <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>
               </div>
             </section>
 

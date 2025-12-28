@@ -13,6 +13,8 @@ const modelHint = document.getElementById("modelHint");
 const usageSummary = document.getElementById("usageSummary");
 const usageList = document.getElementById("usageList");
 const resetUsageBtn = document.getElementById("resetUsageBtn");
+const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+const historySummary = document.getElementById("historySummary");
 
 const themeSelect = document.getElementById("themeSelect");
 
@@ -22,6 +24,7 @@ const STORAGE = {
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
   keysVisibility: "gemini_keys_visibility",
+  history: "gemini_history",
 };
 
 const maskKey = (key) => {
@@ -122,6 +125,18 @@ const renderUsage = () => {
   });
 };
 
+const renderHistorySummary = () => {
+  if (!historySummary) return;
+  let items = [];
+  try {
+    items = JSON.parse(localStorage.getItem(STORAGE.history) || "[]");
+  } catch (error) {
+    items = [];
+  }
+  const count = Array.isArray(items) ? items.length : 0;
+  historySummary.textContent = count ? `已保存 ${count} 条历史记录。` : "暂无历史记录。";
+};
+
 saveKeysBtn.addEventListener("click", () => {
   const keys = parseKeys(keysInput.value);
   saveKeys(keys);
@@ -158,6 +173,13 @@ resetUsageBtn.addEventListener("click", () => {
   renderUsage();
 });
 
+if (clearHistoryBtn) {
+  clearHistoryBtn.addEventListener("click", () => {
+    localStorage.setItem(STORAGE.history, "[]");
+    renderHistorySummary();
+  });
+}
+
 themeSelect.addEventListener("change", () => {
   window.GeminiTheme.setThemePreference(themeSelect.value);
 });
@@ -166,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderKeys();
   renderModel();
   renderUsage();
+  renderHistorySummary();
   themeSelect.value = window.GeminiTheme.getThemePreference();
   applyKeysVisibility(getKeysVisibility());
 });
