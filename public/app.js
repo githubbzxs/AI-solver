@@ -1,3 +1,12 @@
+/*
+  前端主逻辑：
+  - 处理文字/图片输入与预览
+  - 管理剪贴板粘贴与复制
+  - 调用后端 /api/solve 并渲染答案
+  - 记录历史与用量统计
+*/
+
+// ===== 页面元素引用（集中获取，避免重复查询） =====
 const form = document.getElementById("solve-form");
 const promptInput = document.getElementById("prompt");
 const imageInput = document.getElementById("image");
@@ -25,6 +34,7 @@ const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
 const settingsModal = document.getElementById("settingsModal");
 
+// localStorage 的字段名集中管理
 const STORAGE = {
   keys: "gemini_api_keys",
   model: "gemini_model",
@@ -33,6 +43,7 @@ const STORAGE = {
   history: "gemini_history",
 };
 
+// 从 localStorage 读取保存的 API Key 列表（JSON 字符串）
 const loadKeys = () => {
   try {
     const raw = localStorage.getItem(STORAGE.keys);
@@ -42,6 +53,7 @@ const loadKeys = () => {
   }
 };
 
+// 脱敏展示 Key：只保留前后几位
 const maskKey = (key) => {
   if (!key) return "****";
   const trimmed = key.trim();
@@ -49,8 +61,10 @@ const maskKey = (key) => {
   return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
 };
 
+// 读取当前模型配置，默认使用 gemini-3-flash-preview
 const getModel = () => localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
 
+// 更新页面上的模型提示（如果存在）
 const updateSettingsSummary = () => {
   const model = getModel();
   if (modelBadge) {
@@ -58,6 +72,7 @@ const updateSettingsSummary = () => {
   }
 };
 
+// 轮询选择 Key：每次请求使用下一个 Key
 const pickKey = (keys) => {
   const currentIndex = Number.parseInt(
     localStorage.getItem(STORAGE.keyIndex) || "0",
@@ -69,18 +84,22 @@ const pickKey = (keys) => {
   return selected;
 };
 
+// 更新状态标签文本，并标记是否在加载中
 const setStatus = (text, isLoading) => {
   statusTag.textContent = text;
   statusTag.classList.toggle("loading", Boolean(isLoading));
 };
 
+// 控制加载动画与按钮禁用
 const setLoading = (isLoading) => {
   spinner.hidden = !isLoading;
   submitBtn.disabled = isLoading;
 };
 
+// toast 通知的定时器句柄
 let noticeTimer = null;
 
+// 显示短暂提示，并在超时后自动隐藏
 const showNotice = (text, tone = "default") => {
   if (!notice) return;
   notice.textContent = text;
@@ -96,6 +115,7 @@ const showNotice = (text, tone = "default") => {
   }, 2000);
 };
 
+// 使用 KaTeX 自动渲染公式（支持常见数学分隔符）
 const renderMath = (element) => {
   if (!window.renderMathInElement) return;
   window.renderMathInElement(element, {
@@ -109,6 +129,7 @@ const renderMath = (element) => {
   });
 };
 
+// 使用 marked 渲染 Markdown；无库时回退为安全文本
 const renderMarkdown = (text) => {
   if (window.marked) {
     return window.marked.parse(text, { breaks: true });
@@ -119,12 +140,14 @@ const renderMarkdown = (text) => {
   });
 };
 
+// 粘贴/选择单张图片时的快捷处理
 const applyImageFile = (file) => {
   if (!file) return false;
   setSelectedImages([file], { replace: false, announce: "已粘贴图片" });
   return true;
 };
 
+// 在输入框光标位置插入文本，并保持光标位置正确
 const insertAtCursor = (el, text) => {
   const start = el.selectionStart ?? el.value.length;
   const end = el.selectionEnd ?? el.value.length;
@@ -137,6 +160,7 @@ const insertAtCursor = (el, text) => {
   el.focus();
 };
 
+// 处理粘贴文本：若输入框为空则直接填入，否则追加到光标处
 const applyPaste = (text) => {
   if (!text) return;
   if (!promptInput.value.trim()) {
@@ -151,6 +175,7 @@ const applyPaste = (text) => {
   showNotice("已粘贴");
 };
 
+// 从 localStorage 读取历史记录
 const loadHistory = () => {
   try {
     const raw = localStorage.getItem(STORAGE.history);
@@ -160,18 +185,22 @@ const loadHistory = () => {
   }
 };
 
+// 保存历史记录到 localStorage
 const saveHistory = (items) => {
   localStorage.setItem(STORAGE.history, JSON.stringify(items));
 };
 
+// 当前预览图与已选择图片（仅在内存中维护）
 let previewUrls = [];
 let selectedImages = [];
 
+// 释放 ObjectURL，避免内存泄露
 const clearPreviewUrls = () => {
   previewUrls.forEach((url) => URL.revokeObjectURL(url));
   previewUrls = [];
 };
 
+// 将内存中的图片同步回 <input type="file">（部分浏览器可能受限）
 const syncImageInput = () => {
   try {
     const transfer = new DataTransfer();
@@ -182,6 +211,7 @@ const syncImageInput = () => {
   }
 };
 
+// 设置/追加图片列表，并刷新预览与提示
 const setSelectedImages = (files, { replace = false, announce = "" } = {}) => {
   const images = Array.from(files || []).filter(
     (file) => file && file.type && file.type.startsWith("image/")
@@ -196,6 +226,7 @@ const setSelectedImages = (files, { replace = false, announce = "" } = {}) => {
   if (announce) showNotice(announce);
 };
 
+// 按索引移除图片
 const removeImageAt = (index) => {
   if (!Number.isFinite(index)) return;
   selectedImages = selectedImages.filter((_, idx) => idx !== index);
@@ -203,10 +234,12 @@ const removeImageAt = (index) => {
   updateDropzone();
 };
 
+// 根据当前图片列表刷新上传区域与缩略图预览
 const updateDropzone = () => {
   const files = selectedImages;
   clearPreviewUrls();
 
+  // 没有图片时显示“空状态”
   if (!files.length) {
     dropzoneEmpty.hidden = false;
     dropzonePreview.hidden = true;
@@ -215,6 +248,7 @@ const updateDropzone = () => {
     return;
   }
 
+  // 有图片时展示预览列表
   dropzoneEmpty.hidden = true;
   dropzonePreview.hidden = false;
   fileName.textContent = `已选择 ${files.length} 张图片`;
@@ -222,6 +256,7 @@ const updateDropzone = () => {
   if (!imagePreviewList) return;
   imagePreviewList.innerHTML = "";
 
+  // 为每张图片创建缩略图与删除按钮
   files.forEach((file, index) => {
     const url = URL.createObjectURL(file);
     previewUrls.push(url);
@@ -245,9 +280,11 @@ const updateDropzone = () => {
   });
 };
 
+// 渲染历史记录列表（使用 <details> 展开/折叠）
 const renderHistory = () => {
   const items = loadHistory();
   historyList.innerHTML = "";
+  // 空列表时给一个占位提示
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "history-empty";
@@ -256,6 +293,7 @@ const renderHistory = () => {
     return;
   }
 
+  // 使用 <details>/<summary> 让每条记录可展开
   items.forEach((item) => {
     const card = document.createElement("details");
     card.className = "history-item";
@@ -301,8 +339,10 @@ const renderHistory = () => {
   renderMath(historyList);
 };
 
+// 新增一条历史记录，并限制总数量
 const addHistory = ({ prompt, answer, model, imageName }) => {
   const items = loadHistory();
+  // 使用本地时间字符串便于用户阅读
   const time = new Date().toLocaleString("zh-CN", { hour12: false });
   const entry = {
     id: Date.now(),
@@ -312,18 +352,23 @@ const addHistory = ({ prompt, answer, model, imageName }) => {
     model,
     imageName,
   };
+  // 最新的放在最前，最多保留 20 条
   const updated = [entry, ...items].slice(0, 20);
   saveHistory(updated);
   renderHistory();
 };
 
+// 记录用量：按天、按 Key 汇总，便于设置页展示
 const recordUsage = (key, usage) => {
   const now = new Date();
+  // 以日期（YYYY-MM-DD）作为存储 key，便于按天统计
   const dayKey = now.toISOString().slice(0, 10);
+  // API 返回结构可能不同，这里兼容总 token 或拆分 token
   const totalTokens =
     usage?.totalTokenCount ||
     (usage?.promptTokenCount || 0) + (usage?.candidatesTokenCount || 0);
 
+  // 读取已有用量数据（坏数据则回退为空对象）
   let store = {};
   try {
     store = JSON.parse(localStorage.getItem(STORAGE.usage) || "{}");
@@ -331,24 +376,29 @@ const recordUsage = (key, usage) => {
     store = {};
   }
 
+  // 初始化当天统计结构
   const today = store[dayKey] || { requests: 0, tokens: 0, perKey: {} };
   today.requests += 1;
   today.tokens += totalTokens || 0;
 
+  // 按 Key 再细分统计（Key 使用脱敏形式）
   const label = maskKey(key);
   const perKey = today.perKey[label] || { requests: 0, tokens: 0 };
   perKey.requests += 1;
   perKey.tokens += totalTokens || 0;
   today.perKey[label] = perKey;
 
+  // 写回 localStorage
   store[dayKey] = today;
   localStorage.setItem(STORAGE.usage, JSON.stringify(store));
 };
 
+// 选择文件后，刷新图片列表
 imageInput.addEventListener("change", () => {
   setSelectedImages(imageInput.files, { replace: true });
 });
 
+// 点击/键盘触发上传（可访问性：Enter/空格）
 dropzone.addEventListener("click", (event) => {
   if (event.target.closest("#removeImageBtn")) return;
   if (event.target.closest(".preview-remove")) return;
@@ -361,6 +411,7 @@ dropzone.addEventListener("keydown", (event) => {
   imageInput.click();
 });
 
+// 清空所有已选图片
 removeImageBtn.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -369,6 +420,7 @@ removeImageBtn.addEventListener("click", (event) => {
   updateDropzone();
 });
 
+// 缩略图上的“×”使用事件委托
 if (imagePreviewList) {
   imagePreviewList.addEventListener("click", (event) => {
     const button = event.target.closest(".preview-remove");
@@ -381,6 +433,7 @@ if (imagePreviewList) {
   });
 }
 
+// 一键粘贴：优先读取图片，其次读取文本
 pasteBtn.addEventListener("click", async () => {
   let handledImage = false;
   if (navigator.clipboard?.read) {
@@ -426,6 +479,7 @@ pasteBtn.addEventListener("click", async () => {
   }
 });
 
+// 复制答案到剪贴板
 copyBtn.addEventListener("click", async () => {
   const text = answerBox.textContent.trim();
   if (!text) return;
@@ -437,17 +491,20 @@ copyBtn.addEventListener("click", async () => {
   }
 });
 
+// 清空历史记录
 clearHistoryBtn.addEventListener("click", () => {
   saveHistory([]);
   renderHistory();
 });
 
+// 展开/收起错误详情
 errorToggle.addEventListener("click", () => {
   const isHidden = errorDetails.hidden;
   errorDetails.hidden = !isHidden;
   errorToggle.textContent = isHidden ? "隐藏详情" : "查看详情";
 });
 
+// 打开弹窗：禁用页面滚动
 const openModal = (modal) => {
   if (!modal) return;
   modal.classList.add("is-open");
@@ -455,6 +512,7 @@ const openModal = (modal) => {
   document.body.classList.add("modal-open");
 };
 
+// 关闭弹窗：恢复页面滚动
 const closeModal = (modal) => {
   if (!modal) return;
   modal.classList.remove("is-open");
@@ -462,6 +520,7 @@ const closeModal = (modal) => {
   document.body.classList.remove("modal-open");
 };
 
+// 顶部按钮打开弹窗
 historyToggle.addEventListener("click", () => {
   openModal(historyModal);
 });
@@ -470,6 +529,7 @@ settingsToggle.addEventListener("click", () => {
   openModal(settingsModal);
 });
 
+// 允许其他入口打开设置弹窗（例如提示按钮）
 document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   btn.addEventListener("click", (event) => {
     event.preventDefault();
@@ -477,6 +537,7 @@ document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   });
 });
 
+// 点击遮罩或关闭按钮关闭弹窗
 document.querySelectorAll("[data-close=\"history\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(historyModal));
 });
@@ -485,18 +546,21 @@ document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(settingsModal));
 });
 
+// ESC 快捷键关闭弹窗
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeModal(historyModal);
   closeModal(settingsModal);
 });
 
+// 页面初始化：更新模型提示/历史/上传区
 document.addEventListener("DOMContentLoaded", () => {
   updateSettingsSummary();
   renderHistory();
   updateDropzone();
 });
 
+// 监听系统粘贴事件：若是图片则直接加入预览
 document.addEventListener("paste", (event) => {
   const clipboard = event.clipboardData;
   if (!clipboard) return;
@@ -524,6 +588,7 @@ document.addEventListener("paste", (event) => {
   });
 });
 
+// 主流程：提交题目 -> 请求后端 -> 渲染答案/记录历史
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorBox.hidden = true;
@@ -536,6 +601,7 @@ form.addEventListener("submit", async (event) => {
   const prompt = promptInput.value.trim();
   const files = selectedImages;
 
+  // 校验：至少有文字或图片
   if (!prompt && files.length === 0) {
     errorDetails.textContent = "请填写题目或上传图片。";
     errorDetails.hidden = true;
@@ -544,6 +610,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  // 校验：必须先保存 API Key
   if (keys.length === 0) {
     errorDetails.textContent = "未保存 API Key，请先在设置页添加。";
     errorDetails.hidden = true;
@@ -552,6 +619,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  // 组装 multipart/form-data 发送给后端
   const apiKey = pickKey(keys);
   const formData = new FormData();
   formData.append("apiKey", apiKey);
@@ -561,21 +629,25 @@ form.addEventListener("submit", async (event) => {
     formData.append("image", file);
   });
 
+  // UI 进入加载状态
   setLoading(true);
   answerBox.textContent = "正在解答，请稍候...";
   setStatus("处理中", true);
 
   try {
+    // 请求后端接口（由后端再转发给 Gemini）
     const response = await fetch("/api/solve", {
       method: "POST",
       body: formData,
     });
     const data = await response.json();
 
+    // HTTP 非 2xx 时抛出错误，进入 catch
     if (!response.ok) {
       throw new Error(data.error || "请求失败。");
     }
 
+    // 正常返回：渲染 Markdown + 公式，并记录历史/用量
     const answerText = data.answer || "暂无返回内容。";
     answerBox.innerHTML = renderMarkdown(answerText);
     renderMath(answerBox);

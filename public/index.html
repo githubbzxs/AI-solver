@@ -1,25 +1,32 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
   <head>
+    <!-- 基本元数据：字符集与移动端视口 -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-solver</title>
+    <!-- 预连接字体域名，提升首屏加载 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 标题与正文字体 -->
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- KaTeX 样式：用于数学公式 -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
       crossorigin="anonymous"
     />
+    <!-- 站点主样式 -->
     <link rel="stylesheet" href="styles.css?v=20251227" />
   </head>
   <body>
+    <!-- 顶部提示条（aria-live 便于读屏软件播报） -->
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <div class="page">
+      <!-- 顶部栏：历史、品牌、设置入口 -->
       <div class="top-bar">
         <button
           type="button"
@@ -53,9 +60,11 @@
         </button>
       </div>
 
+      <!-- 主体区域：左侧输入，右侧输出 -->
       <main class="grid">
         <section class="panel">
           <form id="solve-form">
+            <!-- 输入区：文字题干 + 一键粘贴 -->
             <div class="input-stack">
               <label class="field">
                 <div class="textarea-wrap">
@@ -78,6 +87,7 @@
                 </div>
               </label>
 
+              <!-- 图片上传区：支持多张预览与清空 -->
               <div class="field file">
                 <div class="dropzone" id="dropzone" role="button" tabindex="0">
                   <input
@@ -122,6 +132,7 @@
           </form>
         </section>
 
+        <!-- 输出区：状态、复制按钮、答案与错误提示 -->
         <section class="panel output">
           <div class="output-head">
             <h2>答案</h2>
@@ -132,6 +143,7 @@
             </div>
           </div>
           <div id="answer" class="answer">答案会显示在这里。</div>
+          <!-- 错误提示区域（可展开详情） -->
           <div id="error" class="error" hidden>
             <div class="error-row">
               <span>发生错误</span>
@@ -144,6 +156,7 @@
       </main>
     </div>
 
+    <!-- 历史记录弹窗 -->
     <div class="modal" id="historyModal" aria-hidden="true">
       <div class="modal-backdrop" data-close="history"></div>
       <div class="modal-card">
@@ -164,6 +177,7 @@
       </div>
     </div>
 
+    <!-- 设置弹窗：Key/模型/主题/用量 -->
     <div class="modal" id="settingsModal" aria-hidden="true">
       <div class="modal-backdrop" data-close="settings"></div>
       <div class="modal-card">
@@ -246,6 +260,7 @@
       </div>
     </div>
 
+    <!-- 主题与渲染库：KaTeX 公式、marked Markdown、业务脚本 -->
     <script src="theme.js?v=20251227"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script

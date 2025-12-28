@@ -1,3 +1,4 @@
+/* 主题变量：统一管理颜色、阴影、边框等设计基准 */
 :root {
   --bg: #f5f4f0;
   --bg-deep: #e9e7e2;
@@ -11,6 +12,7 @@
   --shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
 }
 
+/* 深色主题：覆盖变量并调整背景渐变 */
 body[data-theme="dark"] {
   --bg: #0a0b0e;
   --bg-deep: #0f1116;
@@ -28,16 +30,19 @@ body[data-theme="dark"] {
     linear-gradient(160deg, var(--bg) 0%, var(--bg-deep) 100%);
 }
 
+/* 全局基础规则：统一盒模型 */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+/* 通用隐藏属性 */
 [hidden] {
   display: none !important;
 }
 
+/* 页面基础样式与背景氛围 */
 body {
   margin: 0;
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
@@ -49,10 +54,12 @@ body {
   color-scheme: light;
 }
 
+/* 弹窗打开时禁止页面滚动 */
 body.modal-open {
   overflow: hidden;
 }
 
+/* 顶部栏布局：左右两侧按钮 + 中间品牌 */
 .top-bar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -69,11 +76,13 @@ body.modal-open {
   justify-self: end;
 }
 
+/* 设置页顶部栏：简化布局 */
 .top-bar.simple {
   display: flex;
   justify-content: space-between;
 }
 
+/* 顶部提示条（toast） */
 .notice {
   position: fixed;
   top: calc(env(safe-area-inset-top) + 12px);
@@ -104,6 +113,7 @@ body.modal-open {
   background: rgba(55, 20, 20, 0.6);
 }
 
+/* 品牌文字样式 */
 .brand {
   font-family: "DM Serif Display", serif;
   font-size: 1.05rem;
@@ -114,12 +124,14 @@ body.modal-open {
   text-align: center;
 }
 
+/* 模型提示条（可放在标题下方） */
 .model-indicator {
   display: flex;
   justify-content: center;
   margin: 6px 0 20px;
 }
 
+/* 返回/设置链接按钮 */
 .settings-link {
   text-decoration: none;
   color: var(--muted);
@@ -142,12 +154,14 @@ body.modal-open {
   font-weight: 600;
 }
 
+/* 页面内容最大宽度与内边距 */
 .page {
   max-width: 1100px;
   margin: 0 auto;
   padding: 48px 24px calc(72px + env(safe-area-inset-bottom));
 }
 
+/* Hero 区域：介绍文本 + 信息卡片 */
 .hero {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -156,16 +170,19 @@ body.modal-open {
   margin-bottom: 42px;
 }
 
+/* 紧凑版 Hero（用于设置页） */
 .hero.compact {
   margin-bottom: 32px;
 }
 
+/* Hero 标题样式 */
 .hero-text h1 {
   font-family: "DM Serif Display", serif;
   font-size: clamp(2.4rem, 4vw, 3.5rem);
   margin: 8px 0 12px;
 }
 
+/* 小标题（上方的提示文字） */
 .kicker {
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -173,12 +190,14 @@ body.modal-open {
   color: var(--muted);
 }
 
+/* 导语文字 */
 .lead {
   font-size: 1.05rem;
   color: var(--muted);
   max-width: 420px;
 }
 
+/* Hero 右侧卡片 */
 .hero-card {
   background: var(--card);
   border-radius: 22px;
@@ -189,6 +208,7 @@ body.modal-open {
   animation: floatIn 0.8s ease both;
 }
 
+/* 小徽章标签 */
 .badge {
   display: inline-block;
   padding: 6px 12px;
@@ -202,17 +222,20 @@ body.modal-open {
   margin-bottom: 12px;
 }
 
+/* 说明性文字 */
 .meta {
   color: var(--muted);
   margin: 0;
 }
 
+/* 通用网格布局：左右两栏或自适应多列 */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
 }
 
+/* 面板进入动画（轻微上浮） */
 .grid > .panel {
   animation: panelIn 0.7s ease both;
 }
@@ -233,6 +256,7 @@ body.modal-open {
   animation-delay: 0.22s;
 }
 
+/* 卡片面板：用于表单、结果、设置等区域 */
 .panel {
   background: var(--card);
   backdrop-filter: blur(14px);
@@ -242,12 +266,14 @@ body.modal-open {
   box-shadow: var(--shadow);
 }
 
+/* 面板标题 */
 .panel h2 {
   margin-top: 0;
   margin-bottom: 16px;
   font-size: 1.2rem;
 }
 
+/* 表单字段：统一纵向布局与间距 */
 .field {
   display: flex;
   flex-direction: column;
@@ -257,6 +283,7 @@ body.modal-open {
   width: 100%;
 }
 
+/* 输入堆叠：把文本区与上传区组合成一个整体 */
 .input-stack {
   display: grid;
   gap: 0;
@@ -267,24 +294,29 @@ body.modal-open {
   overflow: hidden;
 }
 
+/* 输入聚焦时的高亮边框 */
 .input-stack:focus-within {
   border-color: var(--line);
 }
 
+/* 堆叠内部的字段间距 */
 .input-stack .field {
   margin-bottom: 0;
   padding: 14px 16px;
   gap: 10px;
 }
 
+/* 堆叠内分隔线 */
 .input-stack .field + .field {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* 上传字段的额外内边距 */
 .input-stack .field.file {
   padding-top: 12px;
 }
 
+/* 字段行：左右对齐的文本与按钮 */
 .field-row {
   display: flex;
   align-items: center;
@@ -292,12 +324,14 @@ body.modal-open {
   gap: 12px;
 }
 
+/* 文本域容器：便于放置“粘贴”按钮 */
 .textarea-wrap {
   position: relative;
   width: 100%;
   display: block;
 }
 
+/* 文本域基础尺寸 */
 .textarea-wrap textarea {
   width: 100%;
   display: block;
@@ -305,6 +339,7 @@ body.modal-open {
   min-height: 140px;
 }
 
+/* 堆叠内文本域：透明背景以融入容器 */
 .input-stack .textarea-wrap textarea {
   background: transparent;
   border: 0;
@@ -312,6 +347,7 @@ body.modal-open {
   min-height: 140px;
 }
 
+/* 一键粘贴按钮 */
 .paste-button {
   position: absolute;
   right: 0;
@@ -335,6 +371,7 @@ body.modal-open {
   justify-content: center;
 }
 
+/* 表单控件统一外观 */
 .field input,
 .field textarea,
 .field select {
@@ -347,10 +384,12 @@ body.modal-open {
   color: var(--ink);
 }
 
+/* 文本域允许竖向拖拽调整高度 */
 .field textarea {
   resize: vertical;
 }
 
+/* 聚焦状态：边框高亮、去掉默认 outline */
 .field input:focus,
 .field textarea:focus,
 .field select:focus {
@@ -358,6 +397,7 @@ body.modal-open {
   border-color: var(--line);
 }
 
+/* Key 输入框：用圆点遮罩，防止直接泄露 */
 .key-input.masked {
   -webkit-text-security: disc;
   text-security: disc;
@@ -366,6 +406,7 @@ body.modal-open {
   caret-color: var(--ink);
 }
 
+/* 上传拖拽/点击区域 */
 .dropzone {
   position: relative;
   border-radius: 16px;
@@ -382,26 +423,31 @@ body.modal-open {
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
+/* 堆叠内 dropzone 的背景更深 */
 .input-stack .dropzone {
   background: rgba(0, 0, 0, 0.2);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+/* 悬停时边框高亮 */
 .dropzone:hover {
   border-color: var(--line);
 }
 
+/* 键盘聚焦时可见的外边框 */
 .dropzone:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.2);
   outline-offset: 3px;
 }
 
+/* 空状态：图标 + 提示文案 */
 .dropzone-empty {
   display: grid;
   gap: 10px;
   justify-items: center;
 }
 
+/* 空状态图标 */
 .dropzone-empty svg {
   width: 28px;
   height: 28px;
@@ -412,18 +458,21 @@ body.modal-open {
   stroke-linejoin: round;
 }
 
+/* 预览容器 */
 .dropzone-preview {
   display: grid;
   gap: 12px;
   width: 100%;
 }
 
+/* 缩略图网格布局 */
 .preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 10px;
 }
 
+/* 单个缩略图容器 */
 .preview-item {
   position: relative;
   border-radius: 12px;
@@ -432,6 +481,7 @@ body.modal-open {
   background: rgba(0, 0, 0, 0.25);
 }
 
+/* 缩略图样式 */
 .preview-item img {
   width: 100%;
   height: 72px;
@@ -439,6 +489,7 @@ body.modal-open {
   display: block;
 }
 
+/* 缩略图右上角的删除按钮 */
 .preview-remove {
   position: absolute;
   top: 6px;
@@ -457,6 +508,7 @@ body.modal-open {
   cursor: pointer;
 }
 
+/* 预览下方的文件信息 + 清空按钮 */
 .preview-meta {
   display: flex;
   align-items: center;
@@ -464,6 +516,7 @@ body.modal-open {
   gap: 10px;
 }
 
+/* 真正的 file input 隐藏，只用来触发文件选择 */
 .file-input {
   position: absolute;
   inset: 0;
@@ -471,6 +524,7 @@ body.modal-open {
   pointer-events: none;
 }
 
+/* 选中文件名：超长时省略 */
 .file-name {
   font-size: 0.85rem;
   color: var(--muted);
@@ -480,6 +534,7 @@ body.modal-open {
   white-space: nowrap;
 }
 
+/* 小徽章容器（例如提示/警告） */
 .meta-badges {
   display: flex;
   flex-wrap: wrap;
@@ -487,6 +542,7 @@ body.modal-open {
   margin: 6px 0 18px;
 }
 
+/* 胶囊标签（通用） */
 .pill {
   padding: 6px 12px;
   border-radius: 999px;
@@ -497,16 +553,19 @@ body.modal-open {
   letter-spacing: 0.02em;
 }
 
+/* 警示状态的胶囊 */
 .pill.warn {
   color: #e6b9b9;
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* 低对比度胶囊 */
 .pill.subtle {
   background: rgba(15, 15, 18, 0.06);
   border-color: rgba(16, 17, 19, 0.1);
 }
 
+/* 按钮基础样式 */
 button {
   width: 100%;
   padding: 12px 18px;
@@ -532,6 +591,7 @@ button:disabled {
   box-shadow: none;
 }
 
+/* 幽灵按钮：轻量外观 */
 .ghost {
   background: transparent;
   color: var(--muted);
@@ -539,17 +599,20 @@ button:disabled {
   box-shadow: none;
 }
 
+/* 幽灵按钮的悬停状态 */
 .ghost:hover {
   color: var(--ink);
   border-color: var(--line);
   box-shadow: none;
 }
 
+/* 键盘聚焦可见轮廓 */
 .ghost:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.2);
   outline-offset: 2px;
 }
 
+/* 粘贴按钮在 button 基础上的覆盖 */
 button.paste-button {
   width: auto;
   box-shadow: none;
@@ -558,17 +621,20 @@ button.paste-button {
   color: var(--muted);
 }
 
+/* 小号按钮 */
 .ghost.small {
   padding: 6px 12px;
   font-size: 0.9rem;
 }
 
+/* 大号按钮 */
 .ghost.large {
   padding: 10px 22px;
   font-size: 1rem;
   font-weight: 600;
 }
 
+/* 文本型链接按钮 */
 .text-link {
   background: transparent;
   border: none;
@@ -579,6 +645,7 @@ button.paste-button {
   cursor: pointer;
 }
 
+/* 图标按钮：用于顶部栏 */
 .icon-button {
   width: 40px;
   height: 40px;
@@ -590,11 +657,13 @@ button.paste-button {
   box-shadow: none;
 }
 
+/* 图标按钮的悬停状态 */
 .icon-button:hover {
   transform: none;
   box-shadow: none;
 }
 
+/* 图标线条样式 */
 .icon-button svg {
   width: 18px;
   height: 18px;
@@ -611,6 +680,7 @@ button.paste-button {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* 输出区头部：标题 + 操作按钮 */
 .output-head {
   display: flex;
   justify-content: space-between;
@@ -618,16 +688,19 @@ button.paste-button {
   margin-bottom: 12px;
 }
 
+/* 输出区右侧操作区 */
 .output-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
+/* 输出区按钮的尺寸 */
 .output-actions button {
   width: auto;
 }
 
+/* 状态标签：就绪/处理中 */
 .status {
   font-size: 0.85rem;
   color: var(--muted);
@@ -637,11 +710,13 @@ button.paste-button {
   background: rgba(255, 255, 255, 0.7);
 }
 
+/* 加载中时的状态样式 */
 .status.loading {
   color: var(--ink);
   border-color: var(--line);
 }
 
+/* 旋转加载指示器 */
 .spinner {
   width: 18px;
   height: 18px;
@@ -651,6 +726,7 @@ button.paste-button {
   animation: spin 0.9s linear infinite;
 }
 
+/* 答案展示区域 */
 .answer {
   min-height: 220px;
   padding: 16px;
@@ -662,11 +738,13 @@ button.paste-button {
   font-size: 0.98rem;
 }
 
+/* 历史记录列表容器 */
 .history-list {
   display: grid;
   gap: 14px;
 }
 
+/* 单条历史记录（可展开） */
 .history-item {
   border-radius: 16px;
   border: 1px solid var(--line);
@@ -677,10 +755,12 @@ button.paste-button {
   backdrop-filter: blur(10px);
 }
 
+/* 展开时的提示文字 */
 .history-item[open] .history-open {
   color: var(--ink);
 }
 
+/* <summary> 行布局 */
 .history-summary {
   list-style: none;
   cursor: pointer;
@@ -692,20 +772,24 @@ button.paste-button {
   font-weight: 600;
 }
 
+/* 去掉默认三角标记 */
 .history-summary::-webkit-details-marker {
   display: none;
 }
 
+/* “查看详情”提示文字 */
 .history-open {
   font-size: 0.85rem;
   color: var(--muted);
 }
 
+/* 历史记录中的附加信息（如图片名） */
 .history-meta {
   font-size: 0.85rem;
   color: var(--muted);
 }
 
+/* 历史记录中的正文块 */
 .history-block {
   font-size: 0.92rem;
   line-height: 1.5;
@@ -716,11 +800,13 @@ button.paste-button {
   white-space: pre-wrap;
 }
 
+/* 历史为空时的占位文字 */
 .history-empty {
   color: var(--muted);
   font-size: 0.9rem;
 }
 
+/* 弹窗容器：覆盖全屏，默认隐藏 */
 .modal {
   position: fixed;
   inset: 0;
@@ -734,20 +820,24 @@ button.paste-button {
   z-index: 200;
 }
 
+/* 弹窗打开时：显示并接收事件 */
 .modal.is-open {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
 }
 
+/* 默认禁止弹窗内元素交互（打开时再启用） */
 .modal * {
   pointer-events: none;
 }
 
+/* 打开后恢复弹窗内交互 */
 .modal.is-open * {
   pointer-events: auto;
 }
 
+/* 遮罩层 */
 .modal-backdrop {
   position: absolute;
   inset: 0;
@@ -757,10 +847,12 @@ button.paste-button {
   transition: opacity 0.25s ease;
 }
 
+/* 遮罩显示状态 */
 .modal.is-open .modal-backdrop {
   opacity: 1;
 }
 
+/* 弹窗主体卡片 */
 .modal-card {
   position: relative;
   width: min(960px, 92vw);
@@ -777,11 +869,13 @@ button.paste-button {
   z-index: 2;
 }
 
+/* 弹窗进入动画 */
 .modal.is-open .modal-card {
   transform: translateY(0) scale(1);
   opacity: 1;
 }
 
+/* 弹窗头部：标题与操作 */
 .modal-head {
   display: flex;
   justify-content: space-between;
@@ -791,27 +885,32 @@ button.paste-button {
   border-bottom: 1px solid var(--line);
 }
 
+/* 弹窗标题 */
 .modal-head h2 {
   margin: 0 0 6px;
 }
 
+/* 弹窗副标题 */
 .modal-sub {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
 
+/* 弹窗右侧操作区 */
 .modal-actions {
   display: flex;
   gap: 8px;
 }
 
+/* 弹窗内容区（可滚动） */
 .modal-body {
   padding: 20px 24px 26px;
   overflow: auto;
   max-height: calc(86vh - 84px);
 }
 
+/* 错误提示卡片 */
 .error {
   margin-top: 12px;
   color: #8b1d1d;
@@ -821,6 +920,7 @@ button.paste-button {
   padding: 10px 12px;
 }
 
+/* 错误标题行：标题 + 查看详情按钮 */
 .error-row {
   display: flex;
   align-items: center;
@@ -829,6 +929,7 @@ button.paste-button {
   font-size: 0.9rem;
 }
 
+/* 详细错误信息 */
 .error-details {
   margin-top: 8px;
   color: #7a1a1a;
@@ -836,29 +937,34 @@ button.paste-button {
   white-space: pre-wrap;
 }
 
+/* 面板按钮区 */
 .panel-actions {
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
 }
 
+/* 面板按钮的统一宽度 */
 .panel-actions button {
   width: auto;
   flex: 1;
 }
 
+/* 辅助说明文字 */
 .hint {
   font-size: 0.85rem;
   color: var(--muted);
   margin-bottom: 10px;
 }
 
+/* Key 列表与用量列表容器 */
 .key-list,
 .usage-list {
   display: grid;
   gap: 8px;
 }
 
+/* Key 与用量的胶囊条目 */
 .key-pill,
 .usage-row {
   padding: 8px 12px;
@@ -868,15 +974,18 @@ button.paste-button {
   background: rgba(255, 255, 255, 0.6);
 }
 
+/* 用量汇总文字 */
 .usage-summary {
   font-size: 0.95rem;
   margin-bottom: 12px;
 }
 
+/* 设置页网格：比默认更紧凑 */
 .settings-grid {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* 页脚小字 */
 .footer {
   margin-top: 32px;
   display: flex;
@@ -886,6 +995,7 @@ button.paste-button {
   font-size: 0.85rem;
 }
 
+/* 动画：卡片轻浮入场 */
 @keyframes floatIn {
   from {
     transform: translateY(16px);
@@ -897,6 +1007,7 @@ button.paste-button {
   }
 }
 
+/* 动画：面板淡入 */
 @keyframes panelIn {
   from {
     transform: translateY(14px);
@@ -908,12 +1019,14 @@ button.paste-button {
   }
 }
 
+/* 动画：加载旋转 */
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
+/* 深色主题：组件级别的细节覆盖 */
 body[data-theme="dark"] .panel {
   background: var(--card);
 }
@@ -989,6 +1102,7 @@ body[data-theme="dark"] .error-details {
   color: #e4b8b8;
 }
 
+/* 移动端适配：缩小间距、调整布局 */
 @media (max-width: 720px) {
   .page {
     padding: 32px 18px calc(96px + env(safe-area-inset-bottom));
