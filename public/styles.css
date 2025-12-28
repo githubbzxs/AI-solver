@@ -259,11 +259,12 @@ body.modal-open {
 
 .input-stack {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 0;
+  padding: 0;
   border-radius: 18px;
   border: 1px solid var(--outline);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
 }
 
 .input-stack:focus-within {
@@ -272,6 +273,16 @@ body.modal-open {
 
 .input-stack .field {
   margin-bottom: 0;
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.input-stack .field + .field {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.input-stack .field.file {
+  padding-top: 12px;
 }
 
 .field-row {
@@ -295,14 +306,16 @@ body.modal-open {
 }
 
 .input-stack .textarea-wrap textarea {
-  background: rgba(0, 0, 0, 0.28);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: 0;
+  padding: 0 96px 44px 0;
+  min-height: 140px;
 }
 
 .paste-button {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 0;
+  bottom: 0;
   top: auto;
   transform: none;
   width: auto;
@@ -371,6 +384,7 @@ body.modal-open {
 
 .input-stack .dropzone {
   background: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .dropzone:hover {
@@ -973,8 +987,20 @@ body[data-theme="dark"] .error-details {
   }
 
   .input-stack {
-    padding: 12px;
-    gap: 10px;
+    border-radius: 16px;
+  }
+
+  .input-stack .field {
+    padding: 12px 14px;
+  }
+
+  .input-stack .field.file {
+    padding-top: 10px;
+  }
+
+  .input-stack .textarea-wrap textarea {
+    padding: 0 84px 38px 0;
+    min-height: 120px;
   }
 
   .textarea-wrap textarea {
@@ -983,8 +1009,6 @@ body[data-theme="dark"] .error-details {
   }
 
   .paste-button {
-    right: 10px;
-    bottom: 10px;
     min-width: 68px;
     min-height: 36px;
     font-size: 0.78rem;
