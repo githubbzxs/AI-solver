@@ -2,13 +2,19 @@ const form = document.getElementById("solve-form");
 const promptInput = document.getElementById("prompt");
 const imageInput = document.getElementById("image");
 const fileName = document.getElementById("fileName");
+const dropzone = document.getElementById("dropzone");
+const dropzoneEmpty = document.getElementById("dropzoneEmpty");
+const dropzonePreview = document.getElementById("dropzonePreview");
+const imagePreview = document.getElementById("imagePreview");
+const removeImageBtn = document.getElementById("removeImageBtn");
 const statusTag = document.getElementById("status");
 const answerBox = document.getElementById("answer");
 const errorBox = document.getElementById("error");
 const errorToggle = document.getElementById("errorToggle");
 const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
-const settingsHint = document.getElementById("settingsHint");
+const keyBadge = document.getElementById("keyBadge");
+const modelBadge = document.getElementById("modelBadge");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
@@ -49,12 +55,13 @@ const updateSettingsSummary = () => {
   const keys = loadKeys();
   const model = getModel();
   if (keys.length === 0) {
-    settingsHint.classList.add("warn");
-    settingsHint.textContent = "未保存 Key，请在设置中添加。";
+    keyBadge.classList.add("warn");
+    keyBadge.textContent = "未保存 Key";
   } else {
-    settingsHint.classList.remove("warn");
-    settingsHint.textContent = `Key 数量：${keys.length} · 模型：${model}`;
+    keyBadge.classList.remove("warn");
+    keyBadge.textContent = `Key 数量：${keys.length}`;
   }
+  modelBadge.textContent = `模型：${model}`;
 };
 
 const pickKey = (keys) => {
@@ -114,6 +121,32 @@ const loadHistory = () => {
 
 const saveHistory = (items) => {
   localStorage.setItem(STORAGE.history, JSON.stringify(items));
+};
+
+let previewUrl = "";
+
+const updateDropzone = () => {
+  const file = imageInput.files[0];
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
+  }
+
+  if (!file) {
+    dropzoneEmpty.hidden = false;
+    dropzonePreview.hidden = true;
+    fileName.textContent = "未选择图片";
+    imagePreview.removeAttribute("src");
+    imagePreview.alt = "已上传图片预览";
+    return;
+  }
+
+  previewUrl = URL.createObjectURL(file);
+  imagePreview.src = previewUrl;
+  imagePreview.alt = `已上传图片：${file.name}`;
+  fileName.textContent = file.name;
+  dropzoneEmpty.hidden = true;
+  dropzonePreview.hidden = false;
 };
 
 const renderHistory = () => {
@@ -211,9 +244,24 @@ const recordUsage = (key, usage) => {
   localStorage.setItem(STORAGE.usage, JSON.stringify(store));
 };
 
-imageInput.addEventListener("change", () => {
-  const file = imageInput.files[0];
-  fileName.textContent = file ? file.name : "未选择图片";
+imageInput.addEventListener("change", updateDropzone);
+
+dropzone.addEventListener("click", (event) => {
+  if (event.target.closest("#removeImageBtn")) return;
+  imageInput.click();
+});
+
+dropzone.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  imageInput.click();
+});
+
+removeImageBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  imageInput.value = "";
+  updateDropzone();
 });
 
 pasteBtn.addEventListener("click", async () => {
@@ -310,6 +358,7 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("DOMContentLoaded", () => {
   updateSettingsSummary();
   renderHistory();
+  updateDropzone();
 });
 
 form.addEventListener("submit", async (event) => {

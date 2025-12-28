@@ -20,44 +20,105 @@
   <body>
     <div class="page">
       <div class="top-bar">
+        <button
+          type="button"
+          id="historyToggle"
+          class="icon-button ghost"
+          aria-label="历史解答"
+          title="历史解答"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 9-9"></path>
+            <path d="M3 4v5h5"></path>
+            <path d="M12 7v5l3 2"></path>
+          </svg>
+        </button>
         <span class="brand">AI-solver</span>
-        <div class="top-actions">
-          <button type="button" id="historyToggle" class="ghost large">历史解答</button>
-          <button type="button" id="settingsToggle" class="ghost large">设置</button>
-        </div>
+        <button
+          type="button"
+          id="settingsToggle"
+          class="icon-button ghost"
+          aria-label="设置"
+          title="设置"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v2"></path>
+            <path d="M12 19v2"></path>
+            <path d="M4.93 4.93l1.41 1.41"></path>
+            <path d="M17.66 17.66l1.41 1.41"></path>
+            <path d="M3 12h2"></path>
+            <path d="M19 12h2"></path>
+            <path d="M4.93 19.07l1.41-1.41"></path>
+            <path d="M17.66 6.34l1.41-1.41"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
       </div>
 
       <main class="grid">
         <section class="panel">
-          <h2>开始提问</h2>
           <form id="solve-form">
             <label class="field">
-              <div class="field-row">
-                <span>题目内容</span>
-                <button type="button" id="pasteBtn" class="ghost small">一键粘贴</button>
+              <div class="textarea-wrap">
+                <textarea
+                  id="prompt"
+                  name="prompt"
+                  rows="5"
+                  aria-label="题目内容"
+                  placeholder="请输入题目或粘贴题干..."
+                ></textarea>
+                <button
+                  type="button"
+                  id="pasteBtn"
+                  class="icon-button paste-button"
+                  aria-label="一键粘贴"
+                  title="一键粘贴"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="9" y="2" width="6" height="4" rx="1"></rect>
+                  </svg>
+                </button>
               </div>
-              <textarea
-                id="prompt"
-                name="prompt"
-                rows="5"
-                placeholder="请输入题目或粘贴题干，建议说明需要的解题步骤。"
-              ></textarea>
             </label>
 
-            <label class="field file">
-              <span>题目图片（可选）</span>
-              <div class="file-ui">
+            <div class="field file">
+              <div class="dropzone" id="dropzone" role="button" tabindex="0">
                 <input id="image" name="image" type="file" accept="image/*" class="file-input" />
-                <span class="file-button">选择图片</span>
-                <span id="fileName" class="file-name">未选择图片</span>
+                <div class="dropzone-empty" id="dropzoneEmpty">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M5 7h3l2-2h4l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
+                    ></path>
+                    <circle cx="12" cy="13" r="3"></circle>
+                  </svg>
+                  <span>点击上传题目图片</span>
+                </div>
+                <div class="dropzone-preview" id="dropzonePreview" hidden>
+                  <img id="imagePreview" alt="已上传图片预览" />
+                  <div class="preview-meta">
+                    <span id="fileName" class="file-name">已选择图片</span>
+                    <button
+                      type="button"
+                      id="removeImageBtn"
+                      class="icon-button ghost"
+                      aria-label="移除图片"
+                      title="移除"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12"></path>
+                        <path d="M18 6l-12 12"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </label>
+            </div>
 
-            <p class="form-note" id="settingsHint">
-              API Key 与模型在
-              <button type="button" class="text-link" data-open="settings">设置</button>
-              中管理。
-            </p>
+            <div class="meta-badges" id="settingsHint">
+              <span class="pill" id="keyBadge">未保存 Key</span>
+              <span class="pill" id="modelBadge">模型：gemini-3-flash-preview</span>
+            </div>
             <button type="submit" id="submitBtn">开始解答</button>
           </form>
         </section>
