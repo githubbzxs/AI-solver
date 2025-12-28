@@ -272,13 +272,6 @@ removeImageBtn.addEventListener("click", (event) => {
   updateDropzone();
 });
 
-promptInput.addEventListener("paste", (event) => {
-  const text = event.clipboardData?.getData("text/plain");
-  if (!text) return;
-  event.preventDefault();
-  applyPaste(text);
-});
-
 pasteBtn.addEventListener("click", async () => {
   try {
     const text = await navigator.clipboard.readText();
