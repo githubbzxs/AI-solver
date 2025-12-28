@@ -17,6 +17,7 @@ const modelBadge = document.getElementById("modelBadge");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
+const notice = document.getElementById("notice");
 const historyList = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const historyToggle = document.getElementById("historyToggle");
@@ -78,6 +79,23 @@ const setLoading = (isLoading) => {
   submitBtn.disabled = isLoading;
 };
 
+let noticeTimer = null;
+
+const showNotice = (text, tone = "default") => {
+  if (!notice) return;
+  notice.textContent = text;
+  notice.dataset.tone = tone;
+  notice.hidden = false;
+  notice.classList.add("is-visible");
+  if (noticeTimer) window.clearTimeout(noticeTimer);
+  noticeTimer = window.setTimeout(() => {
+    notice.classList.remove("is-visible");
+    window.setTimeout(() => {
+      notice.hidden = true;
+    }, 220);
+  }, 2000);
+};
+
 const renderMath = (element) => {
   if (!window.renderMathInElement) return;
   window.renderMathInElement(element, {
@@ -88,6 +106,16 @@ const renderMath = (element) => {
       { left: "\\(", right: "\\)", display: false },
     ],
     throwOnError: false,
+  });
+};
+
+const renderMarkdown = (text) => {
+  if (window.marked) {
+    return window.marked.parse(text, { breaks: true });
+  }
+  return text.replace(/[&<>"]/g, (ch) => {
+    const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
+    return map[ch] || ch;
   });
 };
 
@@ -104,17 +132,20 @@ const insertAtCursor = (el, text) => {
 };
 
 const applyPaste = (text) => {
-  if (!text) return;
+  if (!text) {
+    showNotice("剪贴板为空", "error");
+    return;
+  }
   if (!promptInput.value.trim()) {
     promptInput.value = text;
     promptInput.focus();
-    setStatus("已粘贴", false);
+    showNotice("已粘贴");
     return;
   }
 
   const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
   insertAtCursor(promptInput, prefix + text);
-  setStatus("已粘贴", false);
+  showNotice("已粘贴");
 };
 
 const loadHistory = () => {
@@ -272,11 +303,17 @@ removeImageBtn.addEventListener("click", (event) => {
 });
 
 pasteBtn.addEventListener("click", async () => {
+  if (!navigator.clipboard?.readText) {
+    showNotice("浏览器不支持一键粘贴，请长按输入框粘贴", "error");
+    promptInput.focus();
+    return;
+  }
   try {
     const text = await navigator.clipboard.readText();
     applyPaste(text);
   } catch (error) {
     promptInput.focus();
+    showNotice("无法读取剪贴板，请长按输入框粘贴", "error");
   }
 });
 
@@ -285,9 +322,9 @@ copyBtn.addEventListener("click", async () => {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    setStatus("已复制", false);
+    showNotice("已复制");
   } catch (error) {
-    setStatus("复制失败", false);
+    showNotice("复制失败", "error");
   }
 });
 
@@ -351,6 +388,20 @@ document.addEventListener("DOMContentLoaded", () => {
   updateDropzone();
 });
 
+document.addEventListener("paste", (event) => {
+  const items = Array.from(event.clipboardData?.items || []);
+  const imageItem = items.find((item) => item.type && item.type.startsWith("image/"));
+  if (!imageItem) return;
+  const file = imageItem.getAsFile();
+  if (!file) return;
+  event.preventDefault();
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  imageInput.files = transfer.files;
+  updateDropzone();
+  showNotice("已粘贴图片");
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorBox.hidden = true;
@@ -401,7 +452,8 @@ form.addEventListener("submit", async (event) => {
       throw new Error(data.error || "请求失败。");
     }
 
-    answerBox.textContent = data.answer || "暂无返回内容。";
+    const answerText = data.answer || "暂无返回内容。";
+    answerBox.innerHTML = renderMarkdown(answerText);
     renderMath(answerBox);
     recordUsage(apiKey, data.usage);
     addHistory({

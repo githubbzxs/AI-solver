@@ -74,6 +74,36 @@ body.modal-open {
   justify-content: space-between;
 }
 
+.notice {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  opacity: 0;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--ink);
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  z-index: 320;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.notice.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.notice[data-tone="error"] {
+  color: #f2cfcf;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(55, 20, 20, 0.6);
+}
+
 .brand {
   font-family: "DM Serif Display", serif;
   font-size: 1.05rem;
@@ -243,7 +273,7 @@ body.modal-open {
 .textarea-wrap textarea {
   width: 100%;
   display: block;
-  padding: 16px 96px 56px 14px;
+  padding: 16px 104px 60px 14px;
   min-height: 140px;
 }
 
@@ -253,6 +283,7 @@ body.modal-open {
   bottom: 12px;
   top: auto;
   transform: none;
+  width: auto;
   min-width: 72px;
   min-height: 38px;
   padding: 0 14px;
@@ -442,6 +473,19 @@ button:disabled {
   color: var(--ink);
   border-color: var(--line);
   box-shadow: none;
+}
+
+.ghost:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.2);
+  outline-offset: 2px;
+}
+
+button.paste-button {
+  width: auto;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--outline);
+  color: var(--muted);
 }
 
 .ghost.small {
@@ -904,7 +948,7 @@ body[data-theme="dark"] .error-details {
 
   .textarea-wrap textarea {
     min-height: 120px;
-    padding: 14px 88px 52px 12px;
+    padding: 14px 96px 56px 12px;
   }
 
   .paste-button {
@@ -913,6 +957,12 @@ body[data-theme="dark"] .error-details {
     min-width: 68px;
     min-height: 36px;
     font-size: 0.78rem;
+  }
+
+  .notice {
+    top: calc(env(safe-area-inset-top) + 8px);
+    font-size: 0.8rem;
+    padding: 8px 14px;
   }
 
   .dropzone {
