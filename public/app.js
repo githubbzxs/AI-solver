@@ -5,7 +5,7 @@ const fileName = document.getElementById("fileName");
 const dropzone = document.getElementById("dropzone");
 const dropzoneEmpty = document.getElementById("dropzoneEmpty");
 const dropzonePreview = document.getElementById("dropzonePreview");
-const imagePreview = document.getElementById("imagePreview");
+const imagePreviewList = document.getElementById("imagePreviewList");
 const removeImageBtn = document.getElementById("removeImageBtn");
 const statusTag = document.getElementById("status");
 const answerBox = document.getElementById("answer");
@@ -121,11 +121,7 @@ const renderMarkdown = (text) => {
 
 const applyImageFile = (file) => {
   if (!file) return false;
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  imageInput.files = transfer.files;
-  updateDropzone();
-  showNotice("已粘贴图片");
+  setSelectedImages([file], { replace: false, announce: "已粘贴图片" });
   return true;
 };
 
@@ -168,30 +164,85 @@ const saveHistory = (items) => {
   localStorage.setItem(STORAGE.history, JSON.stringify(items));
 };
 
-let previewUrl = "";
+let previewUrls = [];
+let selectedImages = [];
+
+const clearPreviewUrls = () => {
+  previewUrls.forEach((url) => URL.revokeObjectURL(url));
+  previewUrls = [];
+};
+
+const syncImageInput = () => {
+  try {
+    const transfer = new DataTransfer();
+    selectedImages.forEach((file) => transfer.items.add(file));
+    imageInput.files = transfer.files;
+  } catch (error) {
+    // Some browsers block programmatic file assignment.
+  }
+};
+
+const setSelectedImages = (files, { replace = false, announce = "" } = {}) => {
+  const images = Array.from(files || []).filter(
+    (file) => file && file.type && file.type.startsWith("image/")
+  );
+  if (images.length === 0) {
+    if (announce) showNotice(announce, "error");
+    return;
+  }
+  selectedImages = replace ? images : [...selectedImages, ...images];
+  syncImageInput();
+  updateDropzone();
+  if (announce) showNotice(announce);
+};
+
+const removeImageAt = (index) => {
+  if (!Number.isFinite(index)) return;
+  selectedImages = selectedImages.filter((_, idx) => idx !== index);
+  syncImageInput();
+  updateDropzone();
+};
 
 const updateDropzone = () => {
-  const file = imageInput.files[0];
-  if (previewUrl) {
-    URL.revokeObjectURL(previewUrl);
-    previewUrl = "";
-  }
+  const files = selectedImages;
+  clearPreviewUrls();
 
-  if (!file) {
+  if (!files.length) {
     dropzoneEmpty.hidden = false;
     dropzonePreview.hidden = true;
     fileName.textContent = "未选择图片";
-    imagePreview.removeAttribute("src");
-    imagePreview.alt = "已上传图片预览";
+    if (imagePreviewList) imagePreviewList.innerHTML = "";
     return;
   }
 
-  previewUrl = URL.createObjectURL(file);
-  imagePreview.src = previewUrl;
-  imagePreview.alt = `已上传图片：${file.name}`;
-  fileName.textContent = file.name;
   dropzoneEmpty.hidden = true;
   dropzonePreview.hidden = false;
+  fileName.textContent = `已选择 ${files.length} 张图片`;
+
+  if (!imagePreviewList) return;
+  imagePreviewList.innerHTML = "";
+
+  files.forEach((file, index) => {
+    const url = URL.createObjectURL(file);
+    previewUrls.push(url);
+    const item = document.createElement("div");
+    item.className = "preview-item";
+
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = `已上传图片：${file.name}`;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "preview-remove";
+    remove.dataset.index = String(index);
+    remove.setAttribute("aria-label", "移除图片");
+    remove.textContent = "×";
+
+    item.appendChild(img);
+    item.appendChild(remove);
+    imagePreviewList.appendChild(item);
+  });
 };
 
 const renderHistory = () => {
@@ -231,10 +282,15 @@ const renderHistory = () => {
     answer.textContent = `答案：${item.answer || "（无回答）"}`;
 
     card.appendChild(summary);
-    if (item.imageName) {
+    const imageNames = Array.isArray(item.imageName)
+      ? item.imageName
+      : item.imageName
+      ? [item.imageName]
+      : [];
+    if (imageNames.length) {
       const img = document.createElement("div");
       img.className = "history-meta";
-      img.textContent = `图片：${item.imageName}`;
+      img.textContent = `图片：${imageNames.join("、")}`;
       card.appendChild(img);
     }
     card.appendChild(prompt);
@@ -289,10 +345,13 @@ const recordUsage = (key, usage) => {
   localStorage.setItem(STORAGE.usage, JSON.stringify(store));
 };
 
-imageInput.addEventListener("change", updateDropzone);
+imageInput.addEventListener("change", () => {
+  setSelectedImages(imageInput.files, { replace: true });
+});
 
 dropzone.addEventListener("click", (event) => {
   if (event.target.closest("#removeImageBtn")) return;
+  if (event.target.closest(".preview-remove")) return;
   imageInput.click();
 });
 
@@ -305,24 +364,41 @@ dropzone.addEventListener("keydown", (event) => {
 removeImageBtn.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  imageInput.value = "";
+  selectedImages = [];
+  syncImageInput();
   updateDropzone();
 });
+
+if (imagePreviewList) {
+  imagePreviewList.addEventListener("click", (event) => {
+    const button = event.target.closest(".preview-remove");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const index = Number.parseInt(button.dataset.index || "", 10);
+    if (Number.isNaN(index)) return;
+    removeImageAt(index);
+  });
+}
 
 pasteBtn.addEventListener("click", async () => {
   let handledImage = false;
   if (navigator.clipboard?.read) {
     try {
       const items = await navigator.clipboard.read();
+      const imageFiles = [];
       for (const item of items) {
         const imageType = item.types.find((type) => type.startsWith("image/"));
         if (!imageType) continue;
         const blob = await item.getType(imageType);
-        const file = new File([blob], "clipboard-image.png", { type: blob.type });
-        if (applyImageFile(file)) {
-          handledImage = true;
-          break;
-        }
+        imageFiles.push(new File([blob], "clipboard-image.png", { type: blob.type }));
+      }
+      if (imageFiles.length) {
+        setSelectedImages(imageFiles, {
+          replace: false,
+          announce: `已粘贴 ${imageFiles.length} 张图片`,
+        });
+        handledImage = true;
       }
     } catch (error) {
       handledImage = false;
@@ -340,7 +416,7 @@ pasteBtn.addEventListener("click", async () => {
   try {
     const text = await navigator.clipboard.readText();
     if (!text) {
-      showNotice("未检测到文本，可长按输入框粘贴图片", "error");
+      promptInput.focus();
       return;
     }
     applyPaste(text);
@@ -425,19 +501,27 @@ document.addEventListener("paste", (event) => {
   const clipboard = event.clipboardData;
   if (!clipboard) return;
   const items = Array.from(clipboard.items || []);
-  const imageItem = items.find((item) => item.type && item.type.startsWith("image/"));
-  if (imageItem) {
-    const file = imageItem.getAsFile();
-    if (!file) return;
+  const imageItems = items
+    .filter((item) => item.type && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+  if (imageItems.length) {
     event.preventDefault();
-    applyImageFile(file);
+    setSelectedImages(imageItems, {
+      replace: false,
+      announce: `已粘贴 ${imageItems.length} 张图片`,
+    });
     return;
   }
-  const files = Array.from(clipboard.files || []);
-  const imageFile = files.find((file) => file.type && file.type.startsWith("image/"));
-  if (!imageFile) return;
+  const files = Array.from(clipboard.files || []).filter(
+    (file) => file.type && file.type.startsWith("image/")
+  );
+  if (!files.length) return;
   event.preventDefault();
-  applyImageFile(imageFile);
+  setSelectedImages(files, {
+    replace: false,
+    announce: `已粘贴 ${files.length} 张图片`,
+  });
 });
 
 form.addEventListener("submit", async (event) => {
@@ -450,9 +534,9 @@ form.addEventListener("submit", async (event) => {
   const keys = loadKeys();
   const model = getModel();
   const prompt = promptInput.value.trim();
-  const file = imageInput.files[0];
+  const files = selectedImages;
 
-  if (!prompt && !file) {
+  if (!prompt && files.length === 0) {
     errorDetails.textContent = "请填写题目或上传图片。";
     errorDetails.hidden = true;
     errorToggle.textContent = "查看详情";
@@ -473,7 +557,9 @@ form.addEventListener("submit", async (event) => {
   formData.append("apiKey", apiKey);
   formData.append("model", model);
   if (prompt) formData.append("prompt", prompt);
-  if (file) formData.append("image", file);
+  files.forEach((file) => {
+    formData.append("image", file);
+  });
 
   setLoading(true);
   answerBox.textContent = "正在解答，请稍候...";
@@ -498,7 +584,7 @@ form.addEventListener("submit", async (event) => {
       prompt,
       answer: data.answer,
       model: data.model,
-      imageName: file ? file.name : "",
+      imageName: files.length ? files.map((file) => file.name) : [],
     });
     setStatus("完成", false);
   } catch (error) {

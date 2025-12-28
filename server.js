@@ -5,6 +5,8 @@ const multer = require("multer");
 const fetch = globalThis.fetch || require("node-fetch");
 
 const app = express();
+const MAX_IMAGES = 6;
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -12,36 +14,38 @@ const upload = multer({
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.post("/api/solve", upload.single("image"), async (req, res) => {
+app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
   try {
     const apiKey = (req.body.apiKey || process.env.GEMINI_API_KEY || "").trim();
     const apiVersion = "v1beta";
     const model = (req.body.model || "gemini-3-flash-preview").trim();
     const prompt = (req.body.prompt || "").trim();
-    const file = req.file;
+    const files = req.files || [];
 
     if (!apiKey) {
       return res.status(400).json({ error: "Missing API key." });
     }
-    if (!prompt && !file) {
+    if (!prompt && files.length === 0) {
       return res.status(400).json({ error: "Provide text or an image." });
     }
-    if (file && !file.mimetype.startsWith("image/")) {
-      return res.status(400).json({ error: "Only image files are supported." });
+    if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.mimetype))) {
+      return res.status(400).json({
+        error: "Only PNG, JPEG, or WebP images are supported.",
+      });
     }
 
     const parts = [];
     if (prompt) {
       parts.push({ text: prompt });
     }
-    if (file) {
+    files.forEach((file) => {
       parts.push({
         inline_data: {
           mime_type: file.mimetype,
           data: file.buffer.toString("base64"),
         },
       });
-    }
+    });
 
     const normalizedModel = model.replace(/^models\//, "");
     const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${encodeURIComponent(

@@ -80,7 +80,14 @@
 
               <div class="field file">
                 <div class="dropzone" id="dropzone" role="button" tabindex="0">
-                  <input id="image" name="image" type="file" accept="image/*" class="file-input" />
+                  <input
+                    id="image"
+                    name="image"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    class="file-input"
+                  />
                   <div class="dropzone-empty" id="dropzoneEmpty">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path
@@ -91,7 +98,7 @@
                     <span>点击上传题目图片</span>
                   </div>
                   <div class="dropzone-preview" id="dropzonePreview" hidden>
-                    <img id="imagePreview" alt="已上传图片预览" />
+                    <div class="preview-grid" id="imagePreviewList"></div>
                     <div class="preview-meta">
                       <span id="fileName" class="file-name">已选择图片</span>
                       <button
@@ -99,7 +106,7 @@
                         id="removeImageBtn"
                         class="icon-button ghost"
                         aria-label="移除图片"
-                        title="移除"
+                        title="清空"
                       >
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M6 6l12 12"></path>
