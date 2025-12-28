@@ -56,55 +56,57 @@
       <main class="grid">
         <section class="panel">
           <form id="solve-form">
-            <label class="field">
-              <div class="textarea-wrap">
-                <textarea
-                  id="prompt"
-                  name="prompt"
-                  rows="5"
-                  aria-label="题目内容"
-                  placeholder="请输入题目或粘贴题干..."
-                ></textarea>
-                <button
-                  type="button"
-                  id="pasteBtn"
-                  class="paste-button"
-                  aria-label="一键粘贴"
-                  title="一键粘贴"
-                >
-                  粘贴
-                </button>
-              </div>
-            </label>
-
-            <div class="field file">
-              <div class="dropzone" id="dropzone" role="button" tabindex="0">
-                <input id="image" name="image" type="file" accept="image/*" class="file-input" />
-                <div class="dropzone-empty" id="dropzoneEmpty">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M5 7h3l2-2h4l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
-                    ></path>
-                    <circle cx="12" cy="13" r="3"></circle>
-                  </svg>
-                  <span>点击上传题目图片</span>
+            <div class="input-stack">
+              <label class="field">
+                <div class="textarea-wrap">
+                  <textarea
+                    id="prompt"
+                    name="prompt"
+                    rows="5"
+                    aria-label="题目内容"
+                    placeholder="请输入题目或粘贴题干..."
+                  ></textarea>
+                  <button
+                    type="button"
+                    id="pasteBtn"
+                    class="paste-button"
+                    aria-label="一键粘贴"
+                    title="一键粘贴"
+                  >
+                    粘贴
+                  </button>
                 </div>
-                <div class="dropzone-preview" id="dropzonePreview" hidden>
-                  <img id="imagePreview" alt="已上传图片预览" />
-                  <div class="preview-meta">
-                    <span id="fileName" class="file-name">已选择图片</span>
-                    <button
-                      type="button"
-                      id="removeImageBtn"
-                      class="icon-button ghost"
-                      aria-label="移除图片"
-                      title="移除"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 6l12 12"></path>
-                        <path d="M18 6l-12 12"></path>
-                      </svg>
-                    </button>
+              </label>
+
+              <div class="field file">
+                <div class="dropzone" id="dropzone" role="button" tabindex="0">
+                  <input id="image" name="image" type="file" accept="image/*" class="file-input" />
+                  <div class="dropzone-empty" id="dropzoneEmpty">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M5 7h3l2-2h4l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
+                      ></path>
+                      <circle cx="12" cy="13" r="3"></circle>
+                    </svg>
+                    <span>点击上传题目图片</span>
+                  </div>
+                  <div class="dropzone-preview" id="dropzonePreview" hidden>
+                    <img id="imagePreview" alt="已上传图片预览" />
+                    <div class="preview-meta">
+                      <span id="fileName" class="file-name">已选择图片</span>
+                      <button
+                        type="button"
+                        id="removeImageBtn"
+                        class="icon-button ghost"
+                        aria-label="移除图片"
+                        title="移除"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 6l12 12"></path>
+                          <path d="M18 6l-12 12"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

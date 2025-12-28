@@ -119,6 +119,16 @@ const renderMarkdown = (text) => {
   });
 };
 
+const applyImageFile = (file) => {
+  if (!file) return false;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  imageInput.files = transfer.files;
+  updateDropzone();
+  showNotice("已粘贴图片");
+  return true;
+};
+
 const insertAtCursor = (el, text) => {
   const start = el.selectionStart ?? el.value.length;
   const end = el.selectionEnd ?? el.value.length;
@@ -132,10 +142,7 @@ const insertAtCursor = (el, text) => {
 };
 
 const applyPaste = (text) => {
-  if (!text) {
-    showNotice("剪贴板为空", "error");
-    return;
-  }
+  if (!text) return;
   if (!promptInput.value.trim()) {
     promptInput.value = text;
     promptInput.focus();
@@ -303,13 +310,39 @@ removeImageBtn.addEventListener("click", (event) => {
 });
 
 pasteBtn.addEventListener("click", async () => {
+  let handledImage = false;
+  if (navigator.clipboard?.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((type) => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        const file = new File([blob], "clipboard-image.png", { type: blob.type });
+        if (applyImageFile(file)) {
+          handledImage = true;
+          break;
+        }
+      }
+    } catch (error) {
+      handledImage = false;
+    }
+  }
+
+  if (handledImage) return;
+
   if (!navigator.clipboard?.readText) {
     showNotice("浏览器不支持一键粘贴，请长按输入框粘贴", "error");
     promptInput.focus();
     return;
   }
+
   try {
     const text = await navigator.clipboard.readText();
+    if (!text) {
+      showNotice("未检测到文本，可长按输入框粘贴图片", "error");
+      return;
+    }
     applyPaste(text);
   } catch (error) {
     promptInput.focus();
@@ -389,17 +422,22 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("paste", (event) => {
-  const items = Array.from(event.clipboardData?.items || []);
+  const clipboard = event.clipboardData;
+  if (!clipboard) return;
+  const items = Array.from(clipboard.items || []);
   const imageItem = items.find((item) => item.type && item.type.startsWith("image/"));
-  if (!imageItem) return;
-  const file = imageItem.getAsFile();
-  if (!file) return;
+  if (imageItem) {
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    event.preventDefault();
+    applyImageFile(file);
+    return;
+  }
+  const files = Array.from(clipboard.files || []);
+  const imageFile = files.find((file) => file.type && file.type.startsWith("image/"));
+  if (!imageFile) return;
   event.preventDefault();
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  imageInput.files = transfer.files;
-  updateDropzone();
-  showNotice("已粘贴图片");
+  applyImageFile(imageFile);
 });
 
 form.addEventListener("submit", async (event) => {

@@ -257,6 +257,23 @@ body.modal-open {
   width: 100%;
 }
 
+.input-stack {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--outline);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.input-stack:focus-within {
+  border-color: var(--line);
+}
+
+.input-stack .field {
+  margin-bottom: 0;
+}
+
 .field-row {
   display: flex;
   align-items: center;
@@ -275,6 +292,11 @@ body.modal-open {
   display: block;
   padding: 16px 104px 60px 14px;
   min-height: 140px;
+}
+
+.input-stack .textarea-wrap textarea {
+  background: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .paste-button {
@@ -345,6 +367,10 @@ body.modal-open {
   color: var(--muted);
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.input-stack .dropzone {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .dropzone:hover {
@@ -944,6 +970,11 @@ body[data-theme="dark"] .error-details {
 
   .panel {
     padding: 18px;
+  }
+
+  .input-stack {
+    padding: 12px;
+    gap: 10px;
   }
 
   .textarea-wrap textarea {
