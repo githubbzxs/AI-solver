@@ -256,8 +256,7 @@ removeImageBtn.addEventListener("click", (event) => {
 });
 
 pasteBtn.addEventListener("click", async () => {
-  try {
-    const text = await navigator.clipboard.readText();
+  const applyPaste = (text) => {
     if (!text) {
       setStatus("剪贴板为空", false);
       return;
@@ -272,12 +271,18 @@ pasteBtn.addEventListener("click", async () => {
     const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
     insertAtCursor(promptInput, prefix + text);
     setStatus("已粘贴", false);
+  };
+
+  try {
+    const text = await navigator.clipboard.readText();
+    applyPaste(text);
   } catch (error) {
-    setStatus("粘贴受限", false);
-    errorDetails.textContent = "剪贴板权限被拒绝，请手动粘贴。";
-    errorDetails.hidden = true;
-    errorToggle.textContent = "查看详情";
-    errorBox.hidden = false;
+    const manual = window.prompt("粘贴题干", "");
+    if (!manual) {
+      setStatus("已取消", false);
+      return;
+    }
+    applyPaste(manual);
   }
 });
 
