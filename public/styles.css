@@ -84,6 +84,12 @@ body.modal-open {
   text-align: center;
 }
 
+.model-indicator {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 20px;
+}
+
 .settings-link {
   text-decoration: none;
   color: var(--muted);
@@ -232,14 +238,14 @@ body.modal-open {
 }
 
 .textarea-wrap textarea {
-  padding: 14px 48px 40px 14px;
+  padding: 12px 44px 32px 12px;
   min-height: 140px;
 }
 
 .paste-button {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 8px;
+  bottom: 8px;
   width: 34px;
   height: 34px;
   border-radius: 10px;
@@ -269,6 +275,14 @@ body.modal-open {
 .field select:focus {
   outline: none;
   border-color: var(--line);
+}
+
+.key-input.masked {
+  -webkit-text-security: disc;
+  text-security: disc;
+  color: transparent;
+  text-shadow: 0 0 8px rgba(16, 17, 19, 0.6);
+  caret-color: var(--ink);
 }
 
 .dropzone {
@@ -372,6 +386,11 @@ body.modal-open {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+.pill.subtle {
+  background: rgba(15, 15, 18, 0.06);
+  border-color: rgba(16, 17, 19, 0.1);
+}
+
 button {
   width: 100%;
   padding: 12px 18px;
@@ -458,8 +477,8 @@ button:disabled {
 }
 
 .icon-button.paste-button {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 10px;
 }
 
@@ -809,6 +828,15 @@ body[data-theme="dark"] .pill.warn {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+body[data-theme="dark"] .pill.subtle {
+  background: rgba(24, 24, 27, 0.55);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="dark"] .key-input.masked {
+  text-shadow: 0 0 8px rgba(245, 245, 245, 0.55);
+}
+
 body[data-theme="dark"] .dropzone-preview img {
   border-color: var(--outline);
 }
@@ -861,6 +889,11 @@ body[data-theme="dark"] .error-details {
 
   .textarea-wrap textarea {
     min-height: 120px;
+  }
+
+  .paste-button {
+    right: 6px;
+    bottom: 6px;
   }
 
   .dropzone {

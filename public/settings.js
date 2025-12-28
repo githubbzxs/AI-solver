@@ -1,5 +1,6 @@
 (function () {
 const keysInput = document.getElementById("keysInput");
+const toggleKeysBtn = document.getElementById("toggleKeysBtn");
 const saveKeysBtn = document.getElementById("saveKeysBtn");
 const clearKeysBtn = document.getElementById("clearKeysBtn");
 const keysSummary = document.getElementById("keysSummary");
@@ -20,6 +21,7 @@ const STORAGE = {
   model: "gemini_model",
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
+  keysVisibility: "gemini_keys_visibility",
 };
 
 const maskKey = (key) => {
@@ -48,6 +50,17 @@ const parseKeys = (text) => {
     .map((line) => line.trim())
     .filter(Boolean);
   return Array.from(new Set(lines));
+};
+
+const getKeysVisibility = () =>
+  localStorage.getItem(STORAGE.keysVisibility) === "show";
+
+const applyKeysVisibility = (visible) => {
+  if (!toggleKeysBtn) return;
+  keysInput.classList.toggle("masked", !visible);
+  toggleKeysBtn.textContent = visible ? "隐藏" : "显示";
+  toggleKeysBtn.setAttribute("aria-pressed", visible ? "true" : "false");
+  localStorage.setItem(STORAGE.keysVisibility, visible ? "show" : "hide");
 };
 
 const renderKeys = () => {
@@ -122,6 +135,10 @@ clearKeysBtn.addEventListener("click", () => {
   renderKeys();
 });
 
+toggleKeysBtn.addEventListener("click", () => {
+  applyKeysVisibility(keysInput.classList.contains("masked"));
+});
+
 saveModelBtn.addEventListener("click", () => {
   const model = modelInput.value.trim() || "gemini-3-flash-preview";
   localStorage.setItem(STORAGE.model, model);
@@ -150,5 +167,6 @@ document.addEventListener("DOMContentLoaded", () => {
   renderModel();
   renderUsage();
   themeSelect.value = window.GeminiTheme.getThemePreference();
+  applyKeysVisibility(getKeysVisibility());
 });
 })();

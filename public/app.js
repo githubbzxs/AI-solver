@@ -13,7 +13,6 @@ const errorBox = document.getElementById("error");
 const errorToggle = document.getElementById("errorToggle");
 const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
-const keyBadge = document.getElementById("keyBadge");
 const modelBadge = document.getElementById("modelBadge");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
@@ -52,15 +51,7 @@ const maskKey = (key) => {
 const getModel = () => localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
 
 const updateSettingsSummary = () => {
-  const keys = loadKeys();
   const model = getModel();
-  if (keys.length === 0) {
-    keyBadge.classList.add("warn");
-    keyBadge.textContent = "未保存 Key";
-  } else {
-    keyBadge.classList.remove("warn");
-    keyBadge.textContent = `Key 数量：${keys.length}`;
-  }
   modelBadge.textContent = `模型：${model}`;
 };
 
@@ -398,7 +389,7 @@ form.addEventListener("submit", async (event) => {
 
   setLoading(true);
   answerBox.textContent = "正在解答，请稍候...";
-  setStatus(`处理中（${maskKey(apiKey)}）`, true);
+  setStatus("处理中", true);
 
   try {
     const response = await fetch("/api/solve", {
