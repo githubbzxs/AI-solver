@@ -52,7 +52,9 @@ const getModel = () => localStorage.getItem(STORAGE.model) || "gemini-3-flash-pr
 
 const updateSettingsSummary = () => {
   const model = getModel();
-  modelBadge.textContent = `模型：${model}`;
+  if (modelBadge) {
+    modelBadge.textContent = `模型：${model}`;
+  }
 };
 
 const pickKey = (keys) => {
@@ -102,10 +104,7 @@ const insertAtCursor = (el, text) => {
 };
 
 const applyPaste = (text) => {
-  if (!text) {
-    setStatus("剪贴板为空", false);
-    return;
-  }
+  if (!text) return;
   if (!promptInput.value.trim()) {
     promptInput.value = text;
     promptInput.focus();
@@ -278,7 +277,6 @@ pasteBtn.addEventListener("click", async () => {
     applyPaste(text);
   } catch (error) {
     promptInput.focus();
-    setStatus("请长按粘贴", false);
   }
 });
 
