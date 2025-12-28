@@ -277,12 +277,8 @@ pasteBtn.addEventListener("click", async () => {
     const text = await navigator.clipboard.readText();
     applyPaste(text);
   } catch (error) {
-    const manual = window.prompt("粘贴题干", "");
-    if (!manual) {
-      setStatus("已取消", false);
-      return;
-    }
-    applyPaste(manual);
+    promptInput.focus();
+    setStatus("请长按粘贴", false);
   }
 });
 
