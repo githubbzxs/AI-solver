@@ -1,9 +1,9 @@
-﻿// 鏈嶅姟鍣ㄥ叆鍙ｏ細
-// 1) 鎻愪緵闈欐€侀〉闈紙public/锛?
-// 2) 鎺ユ敹鍓嶇琛ㄥ崟/鍥剧墖骞惰浆鍙戠粰 Gemini
-// 3) 鎶婄瓟妗堜笌鐢ㄩ噺淇℃伅杩斿洖缁欐祻瑙堝櫒
+// 服务入口：
+// 1) 提供静态页面（public/）
+// 2) 接收前端表单/图片并转发给 Gemini
+// 3) 把答案与用量信息返回给浏览器
 
-// Node.js 鍐呯疆妯″潡涓庣涓夋柟渚濊禆
+// Node.js 内置模块与第三方依赖
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -25,10 +25,10 @@ const {
   getHistoryImage,
 } = require("./db");
 
-// Node 18+ 鑷甫 fetch锛涙棫鐗堟湰鐢?node-fetch 鍏滃簳
+// Node 18+ 自带 fetch；旧版本用 node-fetch 兼容
 const fetch = globalThis.fetch || require("node-fetch");
 
-// Express 搴旂敤涓庝笂浼犻檺鍒?
+// Express 应用与上传限制
 const app = express();
 const MAX_IMAGES = 6;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -110,7 +110,12 @@ const attachUser = (req, _res, next) => {
   return next();
 };
 
-const requireAuth = (req, res, next) => {\n  if (!req.user) {\n    return res.status(401).json({ error: "请先登录。" });\n  }\n  return next();\n};
+const requireAuth = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "请先登录。" });
+  }
+  return next();
+};
 
 const normalizeEmail = (email) => (email || "").trim().toLowerCase();
 
