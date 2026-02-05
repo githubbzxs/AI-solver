@@ -243,6 +243,37 @@ const extractTextFromResponse = (payload) => {
     .join("");
 };
 
+const safeJsonParse = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+};
+
+// 兼容 SSE 的两种 data 形态：
+// 1) 单行完整 JSON；2) 多行 data 共同组成一个 JSON 文本
+const parseSsePayloads = (rawBlock) => {
+  const lines = rawBlock.split(/\r?\n/);
+  const dataLines = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart());
+
+  if (dataLines.length === 0) return [];
+
+  const merged = dataLines.join("\n").trim();
+  if (!merged || merged === "[DONE]") return [];
+
+  const mergedParsed = safeJsonParse(merged);
+  if (mergedParsed !== null) return [mergedParsed];
+
+  return dataLines
+    .map((line) => line.trim())
+    .filter((line) => line && line !== "[DONE]")
+    .map((line) => safeJsonParse(line))
+    .filter((item) => item !== null);
+};
+
 app.use(express.json({ limit: "1mb" }));
 app.use(attachUser);
 app.use(express.static(path.join(__dirname, "public")));
@@ -487,24 +518,10 @@ app.post(
     };
 
     const handleChunk = (raw) => {
-      const lines = raw.split(/\r?\n/);
-      const dataLines = lines
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .filter(Boolean);
+      const payloads = parseSsePayloads(raw);
+      if (payloads.length === 0) return;
 
-      if (dataLines.length === 0) return;
-
-      dataLines.forEach((dataText) => {
-        if (!dataText || dataText === "[DONE]") return;
-
-        let parsed = null;
-        try {
-          parsed = JSON.parse(dataText);
-        } catch (error) {
-          return;
-        }
-
+      payloads.forEach((parsed) => {
         const list = Array.isArray(parsed) ? parsed : [parsed];
         list.forEach((item) => {
           if (item?.usageMetadata) {
