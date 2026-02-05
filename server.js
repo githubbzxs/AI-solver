@@ -231,6 +231,18 @@ const buildSolvePayload = (req) => {
   };
 };
 
+// 兼容 Gemini 返回对象或数组两种形态，统一提取文本
+const extractTextFromResponse = (payload) => {
+  const list = Array.isArray(payload) ? payload : [payload];
+  return list
+    .flatMap((item) => (Array.isArray(item?.candidates) ? item.candidates : []))
+    .flatMap((candidate) =>
+      Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []
+    )
+    .map((part) => part?.text || "")
+    .join("");
+};
+
 app.use(express.json({ limit: "1mb" }));
 app.use(attachUser);
 app.use(express.static(path.join(__dirname, "public")));
@@ -382,14 +394,11 @@ app.post(
         return res.status(response.status).json({ error: message, details: data });
       }
 
-      const answer = (data?.candidates?.[0]?.content?.parts || [])
-        .map((part) => part.text || "")
-        .join("")
-        .trim();
+      const answer = extractTextFromResponse(data).trim();
 
       const usage = data?.usageMetadata || null;
 
-      if (req.user) {
+      if (req.user && answer) {
         try {
           saveHistoryForUser(req.user, prompt, answer, files);
         } catch (error) {
@@ -482,28 +491,28 @@ app.post(
 
       if (dataLines.length === 0) return;
 
-      const dataText = dataLines.join("\n");
-      if (!dataText || dataText === "[DONE]") return;
+      dataLines.forEach((dataText) => {
+        if (!dataText || dataText === "[DONE]") return;
 
-      let parsed = null;
-      try {
-        parsed = JSON.parse(dataText);
-      } catch (error) {
-        return;
-      }
+        let parsed = null;
+        try {
+          parsed = JSON.parse(dataText);
+        } catch (error) {
+          return;
+        }
 
-      if (parsed?.usageMetadata) {
-        usage = parsed.usageMetadata;
-      }
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        list.forEach((item) => {
+          if (item?.usageMetadata) {
+            usage = item.usageMetadata;
+          }
+        });
 
-      const text = (parsed?.candidates?.[0]?.content?.parts || [])
-        .map((part) => part.text || "")
-        .join("");
-
-      if (text) {
+        const text = extractTextFromResponse(parsed);
+        if (!text) return;
         answerText += text;
         sendEvent("chunk", { text });
-      }
+      });
     };
 
     while (true) {
@@ -519,7 +528,7 @@ app.post(
       handleChunk(buffer);
     }
 
-    if (req.user) {
+    if (req.user && answerText.trim()) {
       try {
         saveHistoryForUser(req.user, prompt, answerText, files);
       } catch (error) {

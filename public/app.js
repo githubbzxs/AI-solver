@@ -236,7 +236,38 @@ const parseSseEvent = (block) => {
   };
 };
 
+// 复制 FormData，避免流式回退时复用同一实例造成兼容问题
+const cloneFormData = (formData) => {
+  const copied = new FormData();
+  for (const [key, value] of formData.entries()) {
+    copied.append(key, value);
+  }
+  return copied;
+};
+
+const solveOnce = async (formData) => {
+  const result = await fetchJson("/api/solve", {
+    method: "POST",
+    body: formData,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: result.status,
+      message: result.message || "请求失败。",
+      details: result.data || null,
+    };
+  }
+  return {
+    ok: true,
+    answer: result.data?.answer || "",
+    usage: result.data?.usage || null,
+    model: result.data?.model || null,
+  };
+};
+
 const streamSolve = async (formData, onChunk) => {
+  const fallbackFormData = cloneFormData(formData);
   const response = await fetch("/api/solve-stream", {
     method: "POST",
     body: formData,
@@ -334,6 +365,10 @@ const streamSolve = async (formData, onChunk) => {
       message: streamError.message,
       details: streamError.details,
     };
+  }
+
+  if (!answer.trim()) {
+    return solveOnce(fallbackFormData);
   }
 
   return {
