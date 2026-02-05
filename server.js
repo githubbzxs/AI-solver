@@ -291,92 +291,95 @@ app.get("/api/history/image/:imageId", requireAuth, (req, res) => {
   res.setHeader("Content-Type", image.mime_type);
   return res.sendFile(path.resolve(image.path));
 });
-app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
-  try {
-    const payload = buildSolvePayload(req);
-    if (payload.error) {
-      return res.status(payload.error.status).json({ error: payload.error.message });
-    }
-
-    const { apiKey, parts, normalizedModel, prompt, files } = payload;
-    const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
-      normalizedModel
-    )}:generateContent?key=${apiKey}`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const message = data?.error?.message || "Gemini API error.";
-      return res.status(response.status).json({ error: message, details: data });
-    }
-
-    const answer = (data?.candidates?.[0]?.content?.parts || [])
-      .map((part) => part.text || "")
-      .join("")
-      .trim();
-
-    const usage = data?.usageMetadata || null;
-
-    if (req.user) {
-      try {
-        saveHistoryForUser(req.user, prompt, answer, files);
-      } catch (error) {
-        // 历史保存失败不影响答题主流程
+app.post(
+  "/api/solve",
+  requireAuth,
+  upload.array("image", MAX_IMAGES),
+  async (req, res) => {
+    try {
+      const payload = buildSolvePayload(req);
+      if (payload.error) {
+        return res.status(payload.error.status).json({ error: payload.error.message });
       }
-    }
 
-    return res.json({
-      answer: answer || "No answer returned.",
-      usage,
-      model: normalizedModel,
-    });
-  } catch (err) {
+      const { apiKey, parts, normalizedModel, prompt, files } = payload;
+      const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
+        normalizedModel
+      )}:generateContent?key=${apiKey}`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const message = data?.error?.message || "Gemini API error.";
+        return res.status(response.status).json({ error: message, details: data });
+      }
+
+      const answer = (data?.candidates?.[0]?.content?.parts || [])
+        .map((part) => part.text || "")
+        .join("")
+        .trim();
+
+      const usage = data?.usageMetadata || null;
+
+      if (req.user) {
+        try {
+          saveHistoryForUser(req.user, prompt, answer, files);
+        } catch (error) {
+          // 历史保存失败不影响答题主流程
+        }
+      }
+
+      return res.json({
+        answer: answer || "No answer returned.",
+        usage,
+        model: normalizedModel,
+      });
+    } catch (err) {
     return res.status(500).json({ error: "Server error.", details: String(err) });
+    }
   }
-});
+);
 
 // 鍋ュ悍妫€鏌ワ細閮ㄧ讲鎴栫洃鎺у彲鐢ㄦ潵鎺㈡椿
-app.post("/api/solve-stream", upload.array("image", MAX_IMAGES), async (req, res) => {
-  let controller = null;
+app.post(
+  "/api/solve-stream",
+  requireAuth,
+  upload.array("image", MAX_IMAGES),
+  async (req, res) => {
+    let controller = null;
 
-  try {
-    const payload = buildSolvePayload(req);
-    if (payload.error) {
-      return res.status(payload.error.status).json({ error: payload.error.message });
-    }
+    try {
+      const payload = buildSolvePayload(req);
+      if (payload.error) {
+        return res.status(payload.error.status).json({ error: payload.error.message });
+      }
 
-    const {
-      apiKey,
-      parts,
-      normalizedModel,
-      prompt,
-      files,
-    } = payload;
-    const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
-      normalizedModel
-    )}:streamGenerateContent?alt=sse&key=${apiKey}`;
+      const { apiKey, parts, normalizedModel, prompt, files } = payload;
+      const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
+        normalizedModel
+      )}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
-    controller = new AbortController();
-    req.on("close", () => {
-      if (controller) controller.abort();
-    });
+      controller = new AbortController();
+      req.on("close", () => {
+        if (controller) controller.abort();
+      });
 
-    const upstream = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-      }),
-      signal: controller.signal,
-    });
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+        }),
+        signal: controller.signal,
+      });
 
     if (!upstream.ok) {
       let errorData = null;
@@ -464,14 +467,15 @@ app.post("/api/solve-stream", upload.array("image", MAX_IMAGES), async (req, res
     }
 
     sendEvent("done", { usage, model: normalizedModel });
-    return res.end();
-  } catch (err) {
-    if (err?.name === "AbortError") {
       return res.end();
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        return res.end();
+      }
+      return res.status(500).json({ error: "Server error.", details: String(err) });
     }
-    return res.status(500).json({ error: "Server error.", details: String(err) });
   }
-});
+);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

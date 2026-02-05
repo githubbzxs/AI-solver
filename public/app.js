@@ -29,6 +29,9 @@ const historyToggle = document.getElementById("historyToggle");
 const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
 const settingsModal = document.getElementById("settingsModal");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authMessage = document.getElementById("authMessage");
 
 // localStorage 的字段名集中管理
 const STORAGE = {
@@ -193,6 +196,16 @@ const fetchJson = async (url, options = {}) => {
 const getAuthUser = () =>
   (window.AISolverAuth && window.AISolverAuth.getUser && window.AISolverAuth.getUser()) ||
   null;
+
+const setAuthHint = (text, tone = "error") => {
+  if (!authMessage) return;
+  authMessage.textContent = text || "";
+  if (tone) {
+    authMessage.dataset.tone = tone;
+  } else {
+    authMessage.removeAttribute("data-tone");
+  }
+};
 
 const parseSseEvent = (block) => {
   const lines = block.split(/\r?\n/);
@@ -695,6 +708,26 @@ const closeModal = (modal) => {
   document.body.classList.remove("modal-open");
 };
 
+const openLoginModal = (message) => {
+  openModal(settingsModal);
+  if (message) {
+    setAuthHint(message, "error");
+  }
+  if (authEmail) {
+    authEmail.focus();
+    authEmail.select();
+  } else if (authPassword) {
+    authPassword.focus();
+  }
+};
+
+const ensureLoggedIn = (message) => {
+  if (getAuthUser()) return true;
+  openLoginModal(message || "请先登录后使用。");
+  showNotice("请先登录后使用。", "error");
+  return false;
+};
+
 // 顶部按钮打开弹窗
 if (historyToggle) {
   historyToggle.addEventListener("click", () => {
@@ -740,11 +773,24 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   renderHistory();
   updateDropzone();
+  const refresh = window.AISolverAuth?.refresh?.();
+  Promise.resolve(refresh).finally(() => {
+    if (!getAuthUser()) {
+      openLoginModal("请先登录后使用。");
+    }
+  });
 });
 
-window.addEventListener("auth-changed", () => {
+window.addEventListener("auth-changed", (event) => {
   if (historyModal && historyModal.classList.contains("is-open")) {
     renderHistory();
+  }
+  if (event?.detail) {
+    if (settingsModal && settingsModal.classList.contains("is-open")) {
+      closeModal(settingsModal);
+    }
+  } else {
+    openLoginModal("请先登录后使用。");
   }
 });
 
@@ -793,6 +839,10 @@ form.addEventListener("submit", async (event) => {
   const keys = loadKeys();
   const prompt = promptInput.value.trim();
   const files = selectedImages;
+
+  if (!ensureLoggedIn()) {
+    return;
+  }
 
   // 校验：至少有文字或图片
   if (!prompt && files.length === 0) {
@@ -866,6 +916,10 @@ form.addEventListener("submit", async (event) => {
         if (!result.ok) {
           const message = result.message || "请求失败。";
           lastError = message;
+          if (result.status === 401) {
+            openLoginModal(message || "请先登录后使用。");
+            throw new Error(message);
+          }
           if (isKeyError(result.status, message)) {
             markInvalidKey(apiKey, getInvalidReason(result.status, message));
           }
