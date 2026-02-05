@@ -64,7 +64,20 @@ const parseCookies = (header) => {
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
-const buildSessionCookie = (token) => {
+const shouldUseSecureCookie = (req) => {
+  const forceSecure = (process.env.SESSION_COOKIE_SECURE || "").trim().toLowerCase();
+  if (forceSecure === "true" || forceSecure === "1") return true;
+  if (forceSecure === "false" || forceSecure === "0") return false;
+
+  const forwardedProto = (req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+
+  return req.secure || forwardedProto === "https";
+};
+
+const buildSessionCookie = (token, secure) => {
   const parts = [
     `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
@@ -72,13 +85,13 @@ const buildSessionCookie = (token) => {
     "SameSite=Lax",
     `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
-  if (process.env.NODE_ENV === "production") {
+  if (secure) {
     parts.push("Secure");
   }
   return parts.join("; ");
 };
 
-const buildLogoutCookie = () => {
+const buildLogoutCookie = (secure) => {
   const parts = [
     `${SESSION_COOKIE}=`,
     "Path=/",
@@ -86,7 +99,7 @@ const buildLogoutCookie = () => {
     "SameSite=Lax",
     "Max-Age=0",
   ];
-  if (process.env.NODE_ENV === "production") {
+  if (secure) {
     parts.push("Secure");
   }
   return parts.join("; ");
@@ -119,19 +132,19 @@ const requireAuth = (req, res, next) => {
 
 const normalizeEmail = (email) => (email || "").trim().toLowerCase();
 
-const issueSession = (res, userId) => {
+const issueSession = (req, res, userId) => {
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   createSession(userId, tokenHash, expiresAt);
-  res.setHeader("Set-Cookie", buildSessionCookie(token));
+  res.setHeader("Set-Cookie", buildSessionCookie(token, shouldUseSecureCookie(req)));
 };
 
-const clearSession = (res, token) => {
+const clearSession = (req, res, token) => {
   if (token) {
     deleteSessionByToken(hashToken(token));
   }
-  res.setHeader("Set-Cookie", buildLogoutCookie());
+  res.setHeader("Set-Cookie", buildLogoutCookie(shouldUseSecureCookie(req)));
 };
 
 const sanitizeBaseName = (name) =>
@@ -194,7 +207,7 @@ app.post("/api/auth/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const user = createUser(email, hash);
-    issueSession(res, user.id);
+    issueSession(req, res, user.id);
     return res.json({ user: { id: user.id, email: user.email } });
   } catch (err) {
     return res.status(500).json({ error: "注册失败。", details: String(err) });
@@ -222,14 +235,14 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "账号或密码错误。" });
     }
 
-    issueSession(res, user.id);
+    issueSession(req, res, user.id);
     return res.json({ user: { id: user.id, email: user.email } });
   } catch (err) {
     return res.status(500).json({ error: "登录失败。", details: String(err) });
   }
 });
 app.post("/api/auth/logout", (req, res) => {
-  clearSession(res, req.sessionToken);
+  clearSession(req, res, req.sessionToken);
   return res.json({ ok: true });
 });
 

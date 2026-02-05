@@ -198,6 +198,14 @@ const getAuthUser = () =>
   (window.AISolverAuth && window.AISolverAuth.getUser && window.AISolverAuth.getUser()) ||
   null;
 
+const refreshAuthUser = async () => {
+  try {
+    await Promise.resolve(window.AISolverAuth?.refresh?.());
+  } catch (error) {
+    // 忽略刷新失败，避免打断主流程
+  }
+};
+
 const setAuthHint = (text, tone = "error") => {
   if (!authMessage) return;
   authMessage.textContent = text || "";
@@ -493,6 +501,9 @@ const renderHistory = async () => {
 
   const result = await fetchJson("/api/history");
   if (!result.ok) {
+    if (result.status === 401) {
+      await refreshAuthUser();
+    }
     renderHistoryEmpty(result.message || "历史记录加载失败。");
     return;
   }
@@ -940,6 +951,7 @@ form.addEventListener("submit", async (event) => {
           const message = result.message || "请求失败。";
           lastError = message;
           if (result.status === 401) {
+            await refreshAuthUser();
             openLoginModal(message || "请先登录后使用。");
             throw new Error(message);
           }
