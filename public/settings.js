@@ -15,8 +15,6 @@
   const usageHistorySummary = document.getElementById("usageHistorySummary");
   const usageHistoryList = document.getElementById("usageHistoryList");
   const usageChart = document.getElementById("usageChart");
-  const chartZoomInBtn = document.getElementById("chartZoomIn");
-  const chartZoomOutBtn = document.getElementById("chartZoomOut");
   const chartRangeLabel = document.getElementById("chartRangeLabel");
   const usageTabs = document.querySelectorAll("[data-usage-tab]");
   const usagePanels = document.querySelectorAll("[data-usage-panel]");
@@ -180,10 +178,6 @@
     if (chartRangeLabel) {
       chartRangeLabel.textContent = `近${chartWindowHours}小时`;
     }
-    const minStep = ZOOM_STEPS[0];
-    const maxStep = ZOOM_STEPS[ZOOM_STEPS.length - 1];
-    if (chartZoomInBtn) chartZoomInBtn.disabled = chartWindowHours <= minStep;
-    if (chartZoomOutBtn) chartZoomOutBtn.disabled = chartWindowHours >= maxStep;
   };
 
   const loadUsageStore = () => {
@@ -480,18 +474,6 @@
       setActiveUsageTab(tab.dataset.usageTab);
     });
   });
-
-  if (chartZoomInBtn) {
-    chartZoomInBtn.addEventListener("click", () => {
-      zoomIn();
-    });
-  }
-
-  if (chartZoomOutBtn) {
-    chartZoomOutBtn.addEventListener("click", () => {
-      zoomOut();
-    });
-  }
 
   if (usageChart) {
     usageChart.addEventListener(

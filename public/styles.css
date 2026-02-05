@@ -949,15 +949,6 @@ button.paste-button {
   color: var(--muted);
 }
 
-.chart-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.chart-buttons button {
-  width: auto;
-}
-
 .usage-chart {
   width: 100%;
   height: 160px;
