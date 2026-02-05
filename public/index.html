@@ -1,1 +1,243 @@
-﻿<!DOCTYPE html> <html lang="zh-CN">   <head>     <!-- 基本元数据：字符集与移动端视口 -->     <meta charset="UTF-8" />     <meta name="viewport" content="width=device-width, initial-scale=1.0" />     <title>AI-solver</title>     <!-- 预连接字体域名，提升首屏加载 -->     <link rel="preconnect" href="https://fonts.googleapis.com" />     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />     <!-- 标题与正文字体 -->     <link       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"       rel="stylesheet"     />     <!-- KaTeX 样式：用于数学公式 -->     <link       rel="stylesheet"       href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"       crossorigin="anonymous"     />     <!-- 站点主样式 -->     <link rel="stylesheet" href="styles.css?v=20251227" />   </head>   <body>     <!-- 顶部提示条（aria-live 便于读屏软件播报） -->     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>     <div class="page">       <!-- 顶部栏：历史、品牌、设置入口 -->       <div class="top-bar">         <button           type="button"           id="historyToggle"           class="icon-button ghost"           aria-label="历史解答"           title="历史解答"         >           <svg viewBox="0 0 24 24" aria-hidden="true">             <path d="M3 12a9 9 0 1 0 9-9"></path>             <path d="M3 4v5h5"></path>             <path d="M12 7v5l3 2"></path>           </svg>         </button>         <span class="brand">AI-solver</span>         <button           type="button"           id="settingsToggle"           class="icon-button ghost"           aria-label="设置"           title="设置"         >           <svg viewBox="0 0 24 24" aria-hidden="true">             <path d="M4 6h10"></path>             <path d="M4 12h16"></path>             <path d="M4 18h12"></path>             <circle cx="17" cy="6" r="2"></circle>             <circle cx="10" cy="18" r="2"></circle>             <circle cx="14" cy="12" r="2"></circle>           </svg>         </button>       </div>        <!-- 主体区域：左侧输入，右侧输出 -->       <main class="grid">         <section class="panel">           <form id="solve-form">             <!-- 输入区：文字题干 + 一键粘贴 -->             <div class="input-stack">               <label class="field">                 <div class="textarea-wrap">                   <textarea                     id="prompt"                     name="prompt"                     rows="5"                     aria-label="题目内容"                     placeholder="请输入题目或粘贴题干..."                   ></textarea>                   <button                     type="button"                     id="pasteBtn"                     class="paste-button"                     aria-label="一键粘贴"                     title="一键粘贴"                   >                     粘贴                   </button>                 </div>               </label>                <!-- 图片上传区：支持多张预览与清空 -->               <div class="field file">                 <div class="dropzone" id="dropzone" role="button" tabindex="0">                   <input                     id="image"                     name="image"                     type="file"                     accept="image/png,image/jpeg,image/webp"                     multiple                     class="file-input"                   />                   <div class="dropzone-empty" id="dropzoneEmpty">                     <svg viewBox="0 0 24 24" aria-hidden="true">                       <path                         d="M5 7h3l2-2h4l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"                       ></path>                       <circle cx="12" cy="13" r="3"></circle>                     </svg>                     <span>点击上传题目图片</span>                   </div>                   <div class="dropzone-preview" id="dropzonePreview" hidden>                     <div class="preview-grid" id="imagePreviewList"></div>                     <div class="preview-meta">                       <span id="fileName" class="file-name">已选择图片</span>                       <button                         type="button"                         id="removeImageBtn"                         class="icon-button ghost"                         aria-label="移除图片"                         title="清空"                       >                         <svg viewBox="0 0 24 24" aria-hidden="true">                           <path d="M6 6l12 12"></path>                           <path d="M18 6l-12 12"></path>                         </svg>                       </button>                     </div>                   </div>                 </div>               </div>             </div>             <button type="submit" id="submitBtn">开始解答</button>           </form>         </section>          <!-- 输出区：状态、复制按钮、答案与错误提示 -->         <section class="panel output">           <div class="output-head">             <h2>答案</h2>             <div class="output-actions">               <div id="spinner" class="spinner" hidden></div>               <span id="status" class="status">就绪</span>               <button type="button" id="copyBtn" class="ghost">复制</button>             </div>           </div>           <div id="answer" class="answer">答案会显示在这里。</div>           <!-- 错误提示区域（可展开详情） -->           <div id="error" class="error" hidden>             <div class="error-row">               <span>发生错误</span>               <button type="button" id="errorToggle" class="ghost small">查看详情</button>             </div>             <div id="errorDetails" class="error-details" hidden></div>           </div>         </section>        </main>     </div>      <!-- 历史记录弹窗 -->     <div class="modal" id="historyModal" aria-hidden="true">       <div class="modal-backdrop" data-close="history"></div>       <div class="modal-card">         <div class="modal-head">           <div>             <h2>历史解答</h2>             <p class="modal-sub">点击条目查看详情</p>           </div>           <div class="modal-actions">             <button type="button" class="ghost small" data-close="history">关闭</button>           </div>         </div>         <div class="modal-body">           <div id="historyList" class="history-list">             <div class="history-empty">暂无记录</div>           </div>         </div>       </div>     </div>      <!-- 设置弹窗：用量/历史/主题 -->     <div class="modal" id="settingsModal" aria-hidden="true">       <div class="modal-backdrop" data-close="settings"></div>       <div class="modal-card">         <div class="modal-head">           <div>             <h2>设置</h2>             <p class="modal-sub">管理用量、历史与主题</p>           </div>           <div class="modal-actions">             <button type="button" class="ghost small" data-close="settings">关闭</button>           </div>         </div>         <div class="modal-body">           <div class="grid settings-grid">                                         <section class="panel">               <h2>今日用量</h2>               <div class="usage-summary" id="usageSummary">今天还没有记录。</div>               <div class="usage-list" id="usageList"></div>               <div class="panel-actions">                 <button type="button" id="resetUsageBtn" class="ghost">清空今日</button>               </div>             </section>              <section class="panel">               <h2>历史记录</h2>               <div class="hint" id="historySummary">暂无历史记录。</div>               <div class="panel-actions">                 <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>               </div>             </section>              <section class="panel">               <h2>主题</h2>               <label class="field">                 <span>颜色模式</span>                 <select id="themeSelect">                   <option value="system">跟随系统</option>                   <option value="light">浅色</option>                   <option value="dark">深色</option>                 </select>               </label>               <div class="hint">主题对所有页面生效。</div>             </section>           </div>         </div>       </div>     </div>      <!-- 主题与渲染库：KaTeX 公式、marked Markdown、业务脚本 -->     <script src="theme.js?v=20251227"></script>     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>     <script       defer       src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"     ></script>     <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>     <script src="settings.js?v=20251227"></script>     <script src="app.js?v=20251227"></script>   </body> </html>
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <!-- 基本元数据：字符集与移动端视口 -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI-solver</title>
+    <!-- 预连接字体域名，提升首屏加载 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 标题与正文字体 -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- KaTeX 样式：用于数学公式 -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      crossorigin="anonymous"
+    />
+    <!-- 站点主样式 -->
+    <link rel="stylesheet" href="styles.css?v=20251227" />
+  </head>
+  <body>
+    <!-- 顶部提示条（aria-live 便于读屏软件播报） -->
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <div class="page">
+      <!-- 顶部栏：品牌、设置入口 -->
+      <div class="top-bar">
+        <div aria-hidden="true"></div>
+        <span class="brand">AI-solver</span>
+        <button
+          type="button"
+          id="settingsToggle"
+          class="icon-button ghost"
+          aria-label="设置"
+          title="设置"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h10"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 18h12"></path>
+            <circle cx="17" cy="6" r="2"></circle>
+            <circle cx="10" cy="18" r="2"></circle>
+            <circle cx="14" cy="12" r="2"></circle>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 主体区域：左侧输入，右侧输出 -->
+      <main class="grid">
+        <section class="panel">
+          <form id="solve-form">
+            <!-- 输入区：文字题干 + 一键粘贴 -->
+            <div class="input-stack">
+              <label class="field">
+                <div class="textarea-wrap">
+                  <textarea
+                    id="prompt"
+                    name="prompt"
+                    rows="5"
+                    aria-label="题目内容"
+                    placeholder="请输入题目或粘贴题干..."
+                  ></textarea>
+                  <button
+                    type="button"
+                    id="pasteBtn"
+                    class="paste-button"
+                    aria-label="一键粘贴"
+                    title="一键粘贴"
+                  >
+                    粘贴
+                  </button>
+                </div>
+              </label>
+
+              <!-- 图片上传区：支持多张预览与清空 -->
+              <div class="field file">
+                <div class="dropzone" id="dropzone" role="button" tabindex="0">
+                  <input
+                    id="image"
+                    name="image"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    class="file-input"
+                  />
+                  <div class="dropzone-empty" id="dropzoneEmpty">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M5 7h3l2-2h4l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
+                      ></path>
+                      <circle cx="12" cy="13" r="3"></circle>
+                    </svg>
+                    <span>点击上传题目图片</span>
+                  </div>
+                  <div class="dropzone-preview" id="dropzonePreview" hidden>
+                    <div class="preview-grid" id="imagePreviewList"></div>
+                    <div class="preview-meta">
+                      <span id="fileName" class="file-name">已选择图片</span>
+                      <button
+                        type="button"
+                        id="removeImageBtn"
+                        class="icon-button ghost"
+                        aria-label="移除图片"
+                        title="清空"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 6l12 12"></path>
+                          <path d="M18 6l-12 12"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button type="submit" id="submitBtn">开始解答</button>
+          </form>
+        </section>
+
+        <!-- 输出区：状态、复制按钮、答案与错误提示 -->
+        <section class="panel output">
+          <div class="output-head">
+            <h2>答案</h2>
+            <div class="output-actions">
+              <div id="spinner" class="spinner" hidden></div>
+              <span id="status" class="status">就绪</span>
+              <button type="button" id="copyBtn" class="ghost">复制</button>
+            </div>
+          </div>
+          <div id="answer" class="answer">答案会显示在这里。</div>
+          <!-- 错误提示区域（可展开详情） -->
+          <div id="error" class="error" hidden>
+            <div class="error-row">
+              <span>发生错误</span>
+              <button type="button" id="errorToggle" class="ghost small">查看详情</button>
+            </div>
+            <div id="errorDetails" class="error-details" hidden></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- 历史记录弹窗 -->
+    <div class="modal" id="historyModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="history"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>历史解答</h2>
+            <p class="modal-sub">点击条目查看详情</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="history">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div id="historyList" class="history-list">
+            <div class="history-empty">暂无记录</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置弹窗：历史使用次数/历史记录 -->
+    <div class="modal" id="settingsModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="settings"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>设置</h2>
+            <p class="modal-sub">管理历史使用次数与历史记录</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="settings">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="grid settings-grid">
+            <section class="panel">
+              <h2>历史使用次数</h2>
+              <div class="usage-summary" id="usageTotalSummary">暂无使用记录。</div>
+              <div class="panel-actions">
+                <button type="button" id="openUsageBtn">查看详情</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>历史记录</h2>
+              <div class="hint" id="historySummary">暂无历史记录。</div>
+              <div class="panel-actions">
+                <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 使用次数详情（二级界面） -->
+    <div class="modal" id="usageModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="usage"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>历史使用次数</h2>
+            <p class="modal-sub">查看今天与历史统计</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="usage">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="tabs">
+            <button type="button" class="tab is-active" data-usage-tab="today">今天</button>
+            <button type="button" class="tab" data-usage-tab="history">历史</button>
+          </div>
+          <div class="tab-panel" data-usage-panel="today">
+            <div class="usage-summary" id="usageTodaySummary">今天还没有记录。</div>
+            <div class="usage-list" id="usageTodayList"></div>
+          </div>
+          <div class="tab-panel" data-usage-panel="history" hidden>
+            <div class="usage-summary" id="usageHistorySummary">暂无历史记录。</div>
+            <div class="usage-list" id="usageHistoryList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主题与渲染库：KaTeX 公式、marked Markdown、业务脚本 -->
+    <script src="theme.js?v=20251227"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    ></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="settings.js?v=20251227"></script>
+    <script src="app.js?v=20251227"></script>
+  </body>
+</html>

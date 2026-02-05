@@ -479,13 +479,17 @@ const closeModal = (modal) => {
 };
 
 // 顶部按钮打开弹窗
-historyToggle.addEventListener("click", () => {
-  openModal(historyModal);
-});
+if (historyToggle) {
+  historyToggle.addEventListener("click", () => {
+    openModal(historyModal);
+  });
+}
 
-settingsToggle.addEventListener("click", () => {
-  openModal(settingsModal);
-});
+if (settingsToggle) {
+  settingsToggle.addEventListener("click", () => {
+    openModal(settingsModal);
+  });
+}
 
 // 允许其他入口打开设置弹窗（例如提示按钮）
 document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
@@ -511,8 +515,11 @@ document.addEventListener("keydown", (event) => {
   closeModal(settingsModal);
 });
 
-// 页面初始化：更新模型提示/历史/上传区
+// 页面初始化：历史/上传区
 document.addEventListener("DOMContentLoaded", () => {
+  if (window.GeminiTheme?.setThemePreference) {
+    window.GeminiTheme.setThemePreference("system");
+  }
   renderHistory();
   updateDropzone();
 });

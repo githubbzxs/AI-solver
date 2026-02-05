@@ -1,2 +1,96 @@
-﻿<!DOCTYPE html> <html lang="zh-CN">   <head>     <!-- 基本元数据 -->     <meta charset="UTF-8" />     <meta name="viewport" content="width=device-width, initial-scale=1.0" />     <title>设置 · AI-solver</title>     <!-- 预连接字体域名，加速字体加载 -->     <link rel="preconnect" href="https://fonts.googleapis.com" />     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />     <!-- 标题与正文用的字体 -->     <link       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"       rel="stylesheet"     />     <!-- 站点主样式 -->     <link rel="stylesheet" href="styles.css?v=20251227" />   </head>   <body>     <!-- 页面主体容器 -->     <div class="page">       <!-- 顶部栏：品牌与返回链接 -->       <div class="top-bar simple">         <span class="brand">AI-solver</span>         <a class="settings-link" href="index.html">返回提问</a>       </div>        <!-- 头部说明：解释设置页功能与数据保存位置 -->       <header class="hero compact">         <div class="hero-text">           <p class="kicker">设置</p>           <h1>用量、历史与主题</h1>           <p class="lead">             查看今日用量、历史记录与主题设置。           </p>         </div>         <div class="hero-card">           <!-- 提示：设置与用量只保存在浏览器本地 -->           <div class="badge">仅本地保存</div>           <p class="meta">             设置与用量仅保存在浏览器本地。           </p>         </div>       </header>        <!-- 设置面板：用量、历史、主题 -->       <main class="grid settings-grid">         <!-- 今日用量：请求次数与 token 统计 -->         <section class="panel">           <h2>今日用量</h2>           <div class="usage-summary" id="usageSummary">今天还没有记录。</div>           <div class="usage-list" id="usageList"></div>           <div class="panel-actions">             <button type="button" id="resetUsageBtn" class="ghost">清空今日</button>           </div>         </section>          <!-- 历史记录：清空主页面的历史条目 -->         <section class="panel">           <h2>历史记录</h2>           <div class="hint" id="historySummary">暂无历史记录。</div>           <div class="panel-actions">             <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>           </div>         </section>          <!-- 主题：深色/浅色/跟随系统 -->         <section class="panel">           <h2>主题</h2>           <label class="field">             <span>颜色模式</span>             <select id="themeSelect">               <option value="system">跟随系统</option>               <option value="light">浅色</option>               <option value="dark">深色</option>             </select>           </label>           <div class="hint">主题对所有页面生效。</div>         </section>       </main>     </div>      <!-- 主题与设置页脚本 -->     <script src="theme.js?v=20251227"></script>     <script src="settings.js?v=20251227"></script>   </body> </html>
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <!-- 基本元数据 -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设置 · AI-solver</title>
+    <!-- 预连接字体域名，加速字体加载 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 标题与正文用的字体 -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- 站点主样式 -->
+    <link rel="stylesheet" href="styles.css?v=20251227" />
+  </head>
+  <body>
+    <!-- 页面主体容器 -->
+    <div class="page">
+      <!-- 顶部栏：品牌与返回链接 -->
+      <div class="top-bar simple">
+        <span class="brand">AI-solver</span>
+        <a class="settings-link" href="index.html">返回提问</a>
+      </div>
 
+      <!-- 头部说明：解释设置页功能与数据保存位置 -->
+      <header class="hero compact">
+        <div class="hero-text">
+          <p class="kicker">设置</p>
+          <h1>历史使用次数与历史记录</h1>
+          <p class="lead">查看今天与历史使用次数，以及历史解答记录。</p>
+        </div>
+        <div class="hero-card">
+          <!-- 提示：设置与用量只保存在浏览器本地 -->
+          <div class="badge">仅本地保存</div>
+          <p class="meta">设置与用量仅保存在浏览器本地。</p>
+        </div>
+      </header>
+
+      <!-- 设置面板：使用次数、历史记录 -->
+      <main class="grid settings-grid">
+        <section class="panel">
+          <h2>历史使用次数</h2>
+          <div class="usage-summary" id="usageTotalSummary">暂无使用记录。</div>
+          <div class="panel-actions">
+            <button type="button" id="openUsageBtn">查看详情</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>历史记录</h2>
+          <div class="hint" id="historySummary">暂无历史记录。</div>
+          <div class="panel-actions">
+            <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- 使用次数详情（二级界面） -->
+    <div class="modal" id="usageModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="usage"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>历史使用次数</h2>
+            <p class="modal-sub">查看今天与历史统计</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="usage">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="tabs">
+            <button type="button" class="tab is-active" data-usage-tab="today">今天</button>
+            <button type="button" class="tab" data-usage-tab="history">历史</button>
+          </div>
+          <div class="tab-panel" data-usage-panel="today">
+            <div class="usage-summary" id="usageTodaySummary">今天还没有记录。</div>
+            <div class="usage-list" id="usageTodayList"></div>
+          </div>
+          <div class="tab-panel" data-usage-panel="history" hidden>
+            <div class="usage-summary" id="usageHistorySummary">暂无历史记录。</div>
+            <div class="usage-list" id="usageHistoryList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主题与设置页脚本 -->
+    <script src="theme.js?v=20251227"></script>
+    <script src="settings.js?v=20251227"></script>
+  </body>
+</html>

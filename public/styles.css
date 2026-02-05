@@ -910,6 +910,31 @@ button.paste-button {
   max-height: calc(86vh - 84px);
 }
 
+/* 使用次数详情标签页 */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.tab.is-active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: transparent;
+}
+
 /* 错误提示卡片 */
 .error {
   margin-top: 12px;
