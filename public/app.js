@@ -1,12 +1,12 @@
 ﻿/*
-  鍓嶇涓婚€昏緫锛?
-  - 澶勭悊鏂囧瓧/鍥剧墖杈撳叆涓庨瑙?
-  - 绠＄悊鍓创鏉跨矘璐翠笌澶嶅埗
-  - 璋冪敤鍚庣 /api/solve 骞舵覆鏌撶瓟妗?
-  - 璁板綍鍘嗗彶涓庣敤閲忕粺璁?
+  前端主逻辑：
+  - 处理文字/图片输入与预览
+  - 管理剪贴板粘贴与复制
+  - 调用后端 /api/solve 并渲染答案
+  - 记录历史与用量统计
 */
 
-// ===== 椤甸潰鍏冪礌寮曠敤锛堥泦涓幏鍙栵紝閬垮厤閲嶅鏌ヨ锛?=====
+// ===== 页面元素引用（集中获取，避免重复查询） =====
 const form = document.getElementById("solve-form");
 const promptInput = document.getElementById("prompt");
 const imageInput = document.getElementById("image");
@@ -22,6 +22,7 @@ const errorBox = document.getElementById("error");
 const errorToggle = document.getElementById("errorToggle");
 const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
+const modelBadge = document.getElementById("modelBadge");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
@@ -33,13 +34,13 @@ const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
 const settingsModal = document.getElementById("settingsModal");
 
-// localStorage 鐨勫瓧娈靛悕闆嗕腑绠＄悊
+// localStorage 的字段名集中管理
 const STORAGE = {
   usage: "gemini_usage",
   history: "gemini_history",
 };
 
-// 内置 Key 标签，仅用于前端统计展示
+// 从 localStorage 读取保存的 API Key 列表（JSON 字符串）
 const INTERNAL_KEY_LABEL = "内置Key";
 
 const setStatus = (text, isLoading) => {
@@ -47,16 +48,16 @@ const setStatus = (text, isLoading) => {
   statusTag.classList.toggle("loading", Boolean(isLoading));
 };
 
-// 鎺у埗鍔犺浇鍔ㄧ敾涓庢寜閽鐢?
+// 控制加载动画与按钮禁用
 const setLoading = (isLoading) => {
   spinner.hidden = !isLoading;
   submitBtn.disabled = isLoading;
 };
 
-// toast 閫氱煡鐨勫畾鏃跺櫒鍙ユ焺
+// toast 通知的定时器句柄
 let noticeTimer = null;
 
-// 鏄剧ず鐭殏鎻愮ず锛屽苟鍦ㄨ秴鏃跺悗鑷姩闅愯棌
+// 显示短暂提示，并在超时后自动隐藏
 const showNotice = (text, tone = "default") => {
   if (!notice) return;
   notice.textContent = text;
@@ -72,7 +73,7 @@ const showNotice = (text, tone = "default") => {
   }, 2000);
 };
 
-// 浣跨敤 KaTeX 鑷姩娓叉煋鍏紡锛堟敮鎸佸父瑙佹暟瀛﹀垎闅旂锛?
+// 使用 KaTeX 自动渲染公式（支持常见数学分隔符）
 const renderMath = (element) => {
   if (!window.renderMathInElement) return;
   window.renderMathInElement(element, {
@@ -86,7 +87,7 @@ const renderMath = (element) => {
   });
 };
 
-// 浣跨敤 marked 娓叉煋 Markdown锛涙棤搴撴椂鍥為€€涓哄畨鍏ㄦ枃鏈?
+// 使用 marked 渲染 Markdown；无库时回退为安全文本
 const renderMarkdown = (text) => {
   if (window.marked) {
     return window.marked.parse(text, { breaks: true });
@@ -97,14 +98,14 @@ const renderMarkdown = (text) => {
   });
 };
 
-// 绮樿创/閫夋嫨鍗曞紶鍥剧墖鏃剁殑蹇嵎澶勭悊
+// 粘贴/选择单张图片时的快捷处理
 const applyImageFile = (file) => {
   if (!file) return false;
-  setSelectedImages([file], { replace: false, announce: "宸茬矘璐村浘鐗? });
+  setSelectedImages([file], { replace: false, announce: "已粘贴图片" });
   return true;
 };
 
-// 鍦ㄨ緭鍏ユ鍏夋爣浣嶇疆鎻掑叆鏂囨湰锛屽苟淇濇寔鍏夋爣浣嶇疆姝ｇ‘
+// 在输入框光标位置插入文本，并保持光标位置正确
 const insertAtCursor = (el, text) => {
   const start = el.selectionStart ?? el.value.length;
   const end = el.selectionEnd ?? el.value.length;
@@ -117,22 +118,22 @@ const insertAtCursor = (el, text) => {
   el.focus();
 };
 
-// 澶勭悊绮樿创鏂囨湰锛氳嫢杈撳叆妗嗕负绌哄垯鐩存帴濉叆锛屽惁鍒欒拷鍔犲埌鍏夋爣澶?
+// 处理粘贴文本：若输入框为空则直接填入，否则追加到光标处
 const applyPaste = (text) => {
   if (!text) return;
   if (!promptInput.value.trim()) {
     promptInput.value = text;
     promptInput.focus();
-    showNotice("宸茬矘璐?);
+    showNotice("已粘贴");
     return;
   }
 
   const prefix = promptInput.value.endsWith("\n") || text.startsWith("\n") ? "" : "\n";
   insertAtCursor(promptInput, prefix + text);
-  showNotice("宸茬矘璐?);
+  showNotice("已粘贴");
 };
 
-// 浠?localStorage 璇诲彇鍘嗗彶璁板綍
+// 从 localStorage 读取历史记录
 const loadHistory = () => {
   try {
     const raw = localStorage.getItem(STORAGE.history);
@@ -142,22 +143,22 @@ const loadHistory = () => {
   }
 };
 
-// 淇濆瓨鍘嗗彶璁板綍鍒?localStorage
+// 保存历史记录到 localStorage
 const saveHistory = (items) => {
   localStorage.setItem(STORAGE.history, JSON.stringify(items));
 };
 
-// 褰撳墠棰勮鍥句笌宸查€夋嫨鍥剧墖锛堜粎鍦ㄥ唴瀛樹腑缁存姢锛?
+// 当前预览图与已选择图片（仅在内存中维护）
 let previewUrls = [];
 let selectedImages = [];
 
-// 閲婃斁 ObjectURL锛岄伩鍏嶅唴瀛樻硠闇?
+// 释放 ObjectURL，避免内存泄露
 const clearPreviewUrls = () => {
   previewUrls.forEach((url) => URL.revokeObjectURL(url));
   previewUrls = [];
 };
 
-// 灏嗗唴瀛樹腑鐨勫浘鐗囧悓姝ュ洖 <input type="file">锛堥儴鍒嗘祻瑙堝櫒鍙兘鍙楅檺锛?
+// 将内存中的图片同步回 <input type="file">（部分浏览器可能受限）
 const syncImageInput = () => {
   try {
     const transfer = new DataTransfer();
@@ -168,7 +169,7 @@ const syncImageInput = () => {
   }
 };
 
-// 璁剧疆/杩藉姞鍥剧墖鍒楄〃锛屽苟鍒锋柊棰勮涓庢彁绀?
+// 设置/追加图片列表，并刷新预览与提示
 const setSelectedImages = (files, { replace = false, announce = "" } = {}) => {
   const images = Array.from(files || []).filter(
     (file) => file && file.type && file.type.startsWith("image/")
@@ -183,7 +184,7 @@ const setSelectedImages = (files, { replace = false, announce = "" } = {}) => {
   if (announce) showNotice(announce);
 };
 
-// 鎸夌储寮曠Щ闄ゅ浘鐗?
+// 按索引移除图片
 const removeImageAt = (index) => {
   if (!Number.isFinite(index)) return;
   selectedImages = selectedImages.filter((_, idx) => idx !== index);
@@ -191,29 +192,29 @@ const removeImageAt = (index) => {
   updateDropzone();
 };
 
-// 鏍规嵁褰撳墠鍥剧墖鍒楄〃鍒锋柊涓婁紶鍖哄煙涓庣缉鐣ュ浘棰勮
+// 根据当前图片列表刷新上传区域与缩略图预览
 const updateDropzone = () => {
   const files = selectedImages;
   clearPreviewUrls();
 
-  // 娌℃湁鍥剧墖鏃舵樉绀衡€滅┖鐘舵€佲€?
+  // 没有图片时显示“空状态”
   if (!files.length) {
     dropzoneEmpty.hidden = false;
     dropzonePreview.hidden = true;
-    fileName.textContent = "鏈€夋嫨鍥剧墖";
+    fileName.textContent = "未选择图片";
     if (imagePreviewList) imagePreviewList.innerHTML = "";
     return;
   }
 
-  // 鏈夊浘鐗囨椂灞曠ず棰勮鍒楄〃
+  // 有图片时展示预览列表
   dropzoneEmpty.hidden = true;
   dropzonePreview.hidden = false;
-  fileName.textContent = `宸查€夋嫨 ${files.length} 寮犲浘鐗嘸;
+  fileName.textContent = `已选择 ${files.length} 张图片`;
 
   if (!imagePreviewList) return;
   imagePreviewList.innerHTML = "";
 
-  // 涓烘瘡寮犲浘鐗囧垱寤虹缉鐣ュ浘涓庡垹闄ゆ寜閽?
+  // 为每张图片创建缩略图与删除按钮
   files.forEach((file, index) => {
     const url = URL.createObjectURL(file);
     previewUrls.push(url);
@@ -222,14 +223,14 @@ const updateDropzone = () => {
 
     const img = document.createElement("img");
     img.src = url;
-    img.alt = `宸蹭笂浼犲浘鐗囷細${file.name}`;
+    img.alt = `已上传图片：${file.name}`;
 
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "preview-remove";
     remove.dataset.index = String(index);
-    remove.setAttribute("aria-label", "绉婚櫎鍥剧墖");
-    remove.textContent = "脳";
+    remove.setAttribute("aria-label", "移除图片");
+    remove.textContent = "×";
 
     item.appendChild(img);
     item.appendChild(remove);
@@ -237,20 +238,20 @@ const updateDropzone = () => {
   });
 };
 
-// 娓叉煋鍘嗗彶璁板綍鍒楄〃锛堜娇鐢?<details> 灞曞紑/鎶樺彔锛?
+// 渲染历史记录列表（使用 <details> 展开/折叠）
 const renderHistory = () => {
   const items = loadHistory();
   historyList.innerHTML = "";
-  // 绌哄垪琛ㄦ椂缁欎竴涓崰浣嶆彁绀?
+  // 空列表时给一个占位提示
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "history-empty";
-    empty.textContent = "鏆傛棤璁板綍";
+    empty.textContent = "暂无记录";
     historyList.appendChild(empty);
     return;
   }
 
-  // 浣跨敤 <details>/<summary> 璁╂瘡鏉¤褰曞彲灞曞紑
+  // 使用 <details>/<summary> 让每条记录可展开
   items.forEach((item) => {
     const card = document.createElement("details");
     card.className = "history-item";
@@ -259,22 +260,22 @@ const renderHistory = () => {
     summary.className = "history-summary";
 
     const summaryLeft = document.createElement("span");
-    summaryLeft.textContent = `${item.time} 路 ${item.model || "gemini-3-flash-preview"}`;
+    summaryLeft.textContent = `${item.time} · ${item.model || "gemini-3-flash-preview"}`;
 
     const summaryRight = document.createElement("span");
     summaryRight.className = "history-open";
-    summaryRight.textContent = "鏌ョ湅璇︽儏";
+    summaryRight.textContent = "查看详情";
 
     summary.appendChild(summaryLeft);
     summary.appendChild(summaryRight);
 
     const prompt = document.createElement("div");
     prompt.className = "history-block";
-    prompt.textContent = `棰樼洰锛?{item.prompt || "锛堟棤鏂囨湰锛?}`;
+    prompt.textContent = `题目：${item.prompt || "（无文本）"}`;
 
     const answer = document.createElement("div");
     answer.className = "history-block";
-    answer.textContent = `绛旀锛?{item.answer || "锛堟棤鍥炵瓟锛?}`;
+    answer.textContent = `答案：${item.answer || "（无回答）"}`;
 
     card.appendChild(summary);
     const imageNames = Array.isArray(item.imageName)
@@ -285,7 +286,7 @@ const renderHistory = () => {
     if (imageNames.length) {
       const img = document.createElement("div");
       img.className = "history-meta";
-      img.textContent = `鍥剧墖锛?{imageNames.join("銆?)}`;
+      img.textContent = `图片：${imageNames.join("、")}`;
       card.appendChild(img);
     }
     card.appendChild(prompt);
@@ -296,10 +297,10 @@ const renderHistory = () => {
   renderMath(historyList);
 };
 
-// 鏂板涓€鏉″巻鍙茶褰曪紝骞堕檺鍒舵€绘暟閲?
+// 新增一条历史记录，并限制总数量
 const addHistory = ({ prompt, answer, model, imageName }) => {
   const items = loadHistory();
-  // 浣跨敤鏈湴鏃堕棿瀛楃涓蹭究浜庣敤鎴烽槄璇?
+  // 使用本地时间字符串便于用户阅读
   const time = new Date().toLocaleString("zh-CN", { hour12: false });
   const entry = {
     id: Date.now(),
@@ -309,23 +310,23 @@ const addHistory = ({ prompt, answer, model, imageName }) => {
     model,
     imageName,
   };
-  // 鏈€鏂扮殑鏀惧湪鏈€鍓嶏紝鏈€澶氫繚鐣?20 鏉?
+  // 最新的放在最前，最多保留 20 条
   const updated = [entry, ...items].slice(0, 20);
   saveHistory(updated);
   renderHistory();
 };
 
-// 璁板綍鐢ㄩ噺锛氭寜澶┿€佹寜 Key 姹囨€伙紝渚夸簬璁剧疆椤靛睍绀?
+// 记录用量：按天、按 Key 汇总，便于设置页展示
 const recordUsage = (usage) => {
   const now = new Date();
-  // 浠ユ棩鏈燂紙YYYY-MM-DD锛変綔涓哄瓨鍌?key锛屼究浜庢寜澶╃粺璁?
+  // 以日期（YYYY-MM-DD）作为存储 key，便于按天统计
   const dayKey = now.toISOString().slice(0, 10);
-  // API 杩斿洖缁撴瀯鍙兘涓嶅悓锛岃繖閲屽吋瀹规€?token 鎴栨媶鍒?token
+  // API 返回结构可能不同，这里兼容总 token 或拆分 token
   const totalTokens =
     usage?.totalTokenCount ||
     (usage?.promptTokenCount || 0) + (usage?.candidatesTokenCount || 0);
 
-  // 璇诲彇宸叉湁鐢ㄩ噺鏁版嵁锛堝潖鏁版嵁鍒欏洖閫€涓虹┖瀵硅薄锛?
+  // 读取已有用量数据（坏数据则回退为空对象）
   let store = {};
   try {
     store = JSON.parse(localStorage.getItem(STORAGE.usage) || "{}");
@@ -333,29 +334,29 @@ const recordUsage = (usage) => {
     store = {};
   }
 
-  // 鍒濆鍖栧綋澶╃粺璁＄粨鏋?
+  // 初始化当天统计结构
   const today = store[dayKey] || { requests: 0, tokens: 0, perKey: {} };
   today.requests += 1;
   today.tokens += totalTokens || 0;
 
-  // 鎸?Key 鍐嶇粏鍒嗙粺璁★紙Key 浣跨敤鑴辨晱褰㈠紡锛?
+  // 按 Key 再细分统计（Key 使用脱敏形式）
   const label = INTERNAL_KEY_LABEL;
   const perKey = today.perKey[label] || { requests: 0, tokens: 0 };
   perKey.requests += 1;
   perKey.tokens += totalTokens || 0;
   today.perKey[label] = perKey;
 
-  // 鍐欏洖 localStorage
+  // 写回 localStorage
   store[dayKey] = today;
   localStorage.setItem(STORAGE.usage, JSON.stringify(store));
 };
 
-// 閫夋嫨鏂囦欢鍚庯紝鍒锋柊鍥剧墖鍒楄〃
+// 选择文件后，刷新图片列表
 imageInput.addEventListener("change", () => {
   setSelectedImages(imageInput.files, { replace: true });
 });
 
-// 鐐瑰嚮/閿洏瑙﹀彂涓婁紶锛堝彲璁块棶鎬э細Enter/绌烘牸锛?
+// 点击/键盘触发上传（可访问性：Enter/空格）
 dropzone.addEventListener("click", (event) => {
   if (event.target.closest("#removeImageBtn")) return;
   if (event.target.closest(".preview-remove")) return;
@@ -368,7 +369,7 @@ dropzone.addEventListener("keydown", (event) => {
   imageInput.click();
 });
 
-// 娓呯┖鎵€鏈夊凡閫夊浘鐗?
+// 清空所有已选图片
 removeImageBtn.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -377,7 +378,7 @@ removeImageBtn.addEventListener("click", (event) => {
   updateDropzone();
 });
 
-// 缂╃暐鍥句笂鐨勨€溍椻€濅娇鐢ㄤ簨浠跺鎵?
+// 缩略图上的“×”使用事件委托
 if (imagePreviewList) {
   imagePreviewList.addEventListener("click", (event) => {
     const button = event.target.closest(".preview-remove");
@@ -390,7 +391,7 @@ if (imagePreviewList) {
   });
 }
 
-// 涓€閿矘璐达細浼樺厛璇诲彇鍥剧墖锛屽叾娆¤鍙栨枃鏈?
+// 一键粘贴：优先读取图片，其次读取文本
 pasteBtn.addEventListener("click", async () => {
   let handledImage = false;
   if (navigator.clipboard?.read) {
@@ -406,7 +407,7 @@ pasteBtn.addEventListener("click", async () => {
       if (imageFiles.length) {
         setSelectedImages(imageFiles, {
           replace: false,
-          announce: `宸茬矘璐?${imageFiles.length} 寮犲浘鐗嘸,
+          announce: `已粘贴 ${imageFiles.length} 张图片`,
         });
         handledImage = true;
       }
@@ -418,7 +419,7 @@ pasteBtn.addEventListener("click", async () => {
   if (handledImage) return;
 
   if (!navigator.clipboard?.readText) {
-    showNotice("娴忚鍣ㄤ笉鏀寔涓€閿矘璐达紝璇烽暱鎸夎緭鍏ユ绮樿创", "error");
+    showNotice("浏览器不支持一键粘贴，请长按输入框粘贴", "error");
     promptInput.focus();
     return;
   }
@@ -432,36 +433,36 @@ pasteBtn.addEventListener("click", async () => {
     applyPaste(text);
   } catch (error) {
     promptInput.focus();
-    showNotice("鏃犳硶璇诲彇鍓创鏉匡紝璇烽暱鎸夎緭鍏ユ绮樿创", "error");
+    showNotice("无法读取剪贴板，请长按输入框粘贴", "error");
   }
 });
 
-// 澶嶅埗绛旀鍒板壀璐存澘
+// 复制答案到剪贴板
 copyBtn.addEventListener("click", async () => {
   const text = answerBox.textContent.trim();
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    showNotice("宸插鍒?);
+    showNotice("已复制");
   } catch (error) {
-    showNotice("澶嶅埗澶辫触", "error");
+    showNotice("复制失败", "error");
   }
 });
 
-// 娓呯┖鍘嗗彶璁板綍
+// 清空历史记录
 clearHistoryBtn.addEventListener("click", () => {
   saveHistory([]);
   renderHistory();
 });
 
-// 灞曞紑/鏀惰捣閿欒璇︽儏
+// 展开/收起错误详情
 errorToggle.addEventListener("click", () => {
   const isHidden = errorDetails.hidden;
   errorDetails.hidden = !isHidden;
-  errorToggle.textContent = isHidden ? "闅愯棌璇︽儏" : "鏌ョ湅璇︽儏";
+  errorToggle.textContent = isHidden ? "隐藏详情" : "查看详情";
 });
 
-// 鎵撳紑寮圭獥锛氱鐢ㄩ〉闈㈡粴鍔?
+// 打开弹窗：禁用页面滚动
 const openModal = (modal) => {
   if (!modal) return;
   modal.classList.add("is-open");
@@ -469,7 +470,7 @@ const openModal = (modal) => {
   document.body.classList.add("modal-open");
 };
 
-// 鍏抽棴寮圭獥锛氭仮澶嶉〉闈㈡粴鍔?
+// 关闭弹窗：恢复页面滚动
 const closeModal = (modal) => {
   if (!modal) return;
   modal.classList.remove("is-open");
@@ -477,7 +478,7 @@ const closeModal = (modal) => {
   document.body.classList.remove("modal-open");
 };
 
-// 椤堕儴鎸夐挳鎵撳紑寮圭獥
+// 顶部按钮打开弹窗
 historyToggle.addEventListener("click", () => {
   openModal(historyModal);
 });
@@ -486,7 +487,7 @@ settingsToggle.addEventListener("click", () => {
   openModal(settingsModal);
 });
 
-// 鍏佽鍏朵粬鍏ュ彛鎵撳紑璁剧疆寮圭獥锛堜緥濡傛彁绀烘寜閽級
+// 允许其他入口打开设置弹窗（例如提示按钮）
 document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   btn.addEventListener("click", (event) => {
     event.preventDefault();
@@ -494,7 +495,7 @@ document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   });
 });
 
-// 鐐瑰嚮閬僵鎴栧叧闂寜閽叧闂脊绐?
+// 点击遮罩或关闭按钮关闭弹窗
 document.querySelectorAll("[data-close=\"history\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(historyModal));
 });
@@ -503,20 +504,20 @@ document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(settingsModal));
 });
 
-// ESC 蹇嵎閿叧闂脊绐?
+// ESC 快捷键关闭弹窗
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeModal(historyModal);
   closeModal(settingsModal);
 });
 
-// 椤甸潰鍒濆鍖栵細鏇存柊妯″瀷鎻愮ず/鍘嗗彶/涓婁紶鍖?
+// 页面初始化：更新模型提示/历史/上传区
 document.addEventListener("DOMContentLoaded", () => {
   renderHistory();
   updateDropzone();
 });
 
-// 鐩戝惉绯荤粺绮樿创浜嬩欢锛氳嫢鏄浘鐗囧垯鐩存帴鍔犲叆棰勮
+// 监听系统粘贴事件：若是图片则直接加入预览
 document.addEventListener("paste", (event) => {
   const clipboard = event.clipboardData;
   if (!clipboard) return;
@@ -529,7 +530,7 @@ document.addEventListener("paste", (event) => {
     event.preventDefault();
     setSelectedImages(imageItems, {
       replace: false,
-      announce: `宸茬矘璐?${imageItems.length} 寮犲浘鐗嘸,
+      announce: `已粘贴 ${imageItems.length} 张图片`,
     });
     return;
   }
@@ -540,55 +541,55 @@ document.addEventListener("paste", (event) => {
   event.preventDefault();
   setSelectedImages(files, {
     replace: false,
-    announce: `宸茬矘璐?${files.length} 寮犲浘鐗嘸,
+    announce: `已粘贴 ${files.length} 张图片`,
   });
 });
 
-// 涓绘祦绋嬶細鎻愪氦棰樼洰 -> 璇锋眰鍚庣 -> 娓叉煋绛旀/璁板綍鍘嗗彶
+// 主流程：提交题目 -> 请求后端 -> 渲染答案/记录历史
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorBox.hidden = true;
   errorDetails.textContent = "";
   errorDetails.hidden = true;
-  errorToggle.textContent = "鏌ョ湅璇︽儏";
+  errorToggle.textContent = "查看详情";
   const prompt = promptInput.value.trim();
   const files = selectedImages;
 
-  // 鏍￠獙锛氳嚦灏戞湁鏂囧瓧鎴栧浘鐗?
+  // 校验：至少有文字或图片
   if (!prompt && files.length === 0) {
-    errorDetails.textContent = "璇峰～鍐欓鐩垨涓婁紶鍥剧墖銆?;
+    errorDetails.textContent = "请填写题目或上传图片。";
     errorDetails.hidden = true;
-    errorToggle.textContent = "鏌ョ湅璇︽儏";
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
     return;
   }
-  // 缁勮 multipart/form-data 鍙戦€佺粰鍚庣
+  // 组装 multipart/form-data 发送给后端
   const formData = new FormData();
   if (prompt) formData.append("prompt", prompt);
   files.forEach((file) => {
     formData.append("image", file);
   });
 
-  // UI 杩涘叆鍔犺浇鐘舵€?
+  // UI 进入加载状态
   setLoading(true);
-  answerBox.textContent = "姝ｅ湪瑙ｇ瓟锛岃绋嶅€?..";
-  setStatus("澶勭悊涓?, true);
+  answerBox.textContent = "正在解答，请稍候...";
+  setStatus("处理中", true);
 
   try {
-    // 璇锋眰鍚庣鎺ュ彛锛堢敱鍚庣鍐嶈浆鍙戠粰 Gemini锛?
+    // 请求后端接口（由后端再转发给 Gemini）
     const response = await fetch("/api/solve", {
       method: "POST",
       body: formData,
     });
     const data = await response.json();
 
-    // HTTP 闈?2xx 鏃舵姏鍑洪敊璇紝杩涘叆 catch
+    // HTTP 非 2xx 时抛出错误，进入 catch
     if (!response.ok) {
-      throw new Error(data.error || "璇锋眰澶辫触銆?);
+      throw new Error(data.error || "请求失败。");
     }
 
-    // 姝ｅ父杩斿洖锛氭覆鏌?Markdown + 鍏紡锛屽苟璁板綍鍘嗗彶/鐢ㄩ噺
-    const answerText = data.answer || "鏆傛棤杩斿洖鍐呭銆?;
+    // 正常返回：渲染 Markdown + 公式，并记录历史/用量
+    const answerText = data.answer || "暂无返回内容。";
     answerBox.innerHTML = renderMarkdown(answerText);
     renderMath(answerBox);
     recordUsage(data.usage);
@@ -598,20 +599,16 @@ form.addEventListener("submit", async (event) => {
       model: data.model,
       imageName: files.length ? files.map((file) => file.name) : [],
     });
-    setStatus("瀹屾垚", false);
+    setStatus("完成", false);
   } catch (error) {
-    answerBox.textContent = "鏆傛棤绛旀銆?;
+    answerBox.textContent = "暂无答案。";
     errorDetails.textContent = error.message;
     errorDetails.hidden = true;
-    errorToggle.textContent = "鏌ョ湅璇︽儏";
+    errorToggle.textContent = "查看详情";
     errorBox.hidden = false;
-    setStatus("閿欒", false);
+    setStatus("错误", false);
   } finally {
     setLoading(false);
   }
 });
-
-
-
-
 
