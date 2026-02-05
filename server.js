@@ -15,6 +15,26 @@ const fetch = globalThis.fetch || require("node-fetch");
 const app = express();
 const MAX_IMAGES = 6;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const DEFAULT_MODEL = "gemini-3-flash-preview";
+const API_KEYS = [
+  "AIzaSyCxWiQGfwvt8tS2fAXiOtlnDdKkVSYRySw",
+  "AIzaSyBuBOlOh92Hpq0rVY_rdN3dVUeng1Iksac",
+  "AIzaSyBRqwYUWLv2CBsdaQeLLUY2KmRqpe4OJBA",
+  "AIzaSyBRqwYUWLv2CBsdaQeLLUY2KmRqpe4OJBA",
+  "AIzaSyC4Axj4_dne60GVWhemd-XpEdf0gEB4FQk",
+  "AIzaSyDzcgbLVrbO1y7jaYoeyGCoEDBllQCAJzA",
+  "AIzaSyDoW3nXL5zivn263zcFifcdWmiQsgrCzxA",
+  "AIzaSyCvLNw5H7LsXJNP3Ffkvu70xWx3n3Cksfw",
+  "AIzaSyA42P_8XOP9feFBRwh6xeljvs7AaHSvpts",
+];
+let apiKeyIndex = 0;
+
+const pickApiKey = () => {
+  if (API_KEYS.length === 0) return "";
+  const key = API_KEYS[apiKeyIndex % API_KEYS.length];
+  apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+  return key;
+};
 // multer 解析 multipart/form-data；内存存储便于直接转 base64
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -27,15 +47,15 @@ app.use(express.static(path.join(__dirname, "public")));
 app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
   try {
     // 从表单或环境变量读取 key/model/prompt 与上传文件
-    const apiKey = (req.body.apiKey || process.env.GEMINI_API_KEY || "").trim();
+    const apiKey = pickApiKey();
     const apiVersion = "v1beta";
-    const model = (req.body.model || "gemini-3-flash-preview").trim();
+    const model = DEFAULT_MODEL;
     const prompt = (req.body.prompt || "").trim();
     const files = req.files || [];
 
     // 基本校验：必须有 Key，且至少提供文字或图片
     if (!apiKey) {
-      return res.status(400).json({ error: "Missing API key." });
+      return res.status(500).json({ error: "Server API key is not configured." });
     }
     if (!prompt && files.length === 0) {
       return res.status(400).json({ error: "Provide text or an image." });
