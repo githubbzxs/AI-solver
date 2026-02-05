@@ -317,7 +317,7 @@ const streamSolve = async (formData, onChunk) => {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split(/\n\n/);
+    const blocks = buffer.split(/\r?\n\r?\n/);
     buffer = blocks.pop() || "";
     blocks.forEach((block) => handleEvent(parseSseEvent(block)));
     if (streamError) break;
@@ -902,7 +902,7 @@ form.addEventListener("submit", async (event) => {
 
   // UI 进入加载状态
   setLoading(true);
-  answerBox.textContent = "正在解答，请稍候...";
+  answerBox.textContent = "";
   setStatus("处理中", true);
 
   try {

@@ -469,6 +469,7 @@ app.post(
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     const reader = upstream.body.getReader();
@@ -480,6 +481,9 @@ app.post(
     const sendEvent = (type, data) => {
       res.write(`event: ${type}\n`);
       res.write(`data: ${JSON.stringify(data)}\n\n`);
+      if (typeof res.flush === "function") {
+        res.flush();
+      }
     };
 
     const handleChunk = (raw) => {
@@ -519,7 +523,7 @@ app.post(
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split(/\n\n/);
+      const blocks = buffer.split(/\r?\n\r?\n/);
       buffer = blocks.pop() || "";
       blocks.forEach(handleChunk);
     }
