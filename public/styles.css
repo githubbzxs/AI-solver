@@ -935,6 +935,20 @@ button.paste-button {
   border-color: transparent;
 }
 
+.usage-chart {
+  width: 100%;
+  height: 160px;
+  display: block;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+body[data-theme="dark"] .usage-chart {
+  background: rgba(0, 0, 0, 0.35);
+}
+
 /* 错误提示卡片 */
 .error {
   margin-top: 12px;

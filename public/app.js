@@ -1,7 +1,7 @@
 ﻿/*
   前端主逻辑：
   - 处理文字/图片输入与预览
-  - 管理剪贴板粘贴与复制
+  - 管理剪贴板粘贴
   - 调用后端 /api/solve 并渲染答案
   - 记录历史与用量统计
 */
@@ -23,7 +23,6 @@ const errorToggle = document.getElementById("errorToggle");
 const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
 const spinner = document.getElementById("spinner");
-const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
 const notice = document.getElementById("notice");
 const historyList = document.getElementById("historyList");
@@ -462,18 +461,6 @@ pasteBtn.addEventListener("click", async () => {
   } catch (error) {
     promptInput.focus();
     showNotice("无法读取剪贴板，请长按输入框粘贴", "error");
-  }
-});
-
-// 复制答案到剪贴板
-copyBtn.addEventListener("click", async () => {
-  const text = answerBox.textContent.trim();
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    showNotice("已复制");
-  } catch (error) {
-    showNotice("复制失败", "error");
   }
 });
 

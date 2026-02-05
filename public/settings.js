@@ -181,6 +181,16 @@
     };
   };
 
+  const resolveChartSize = () => {
+    const rect = usageChart.getBoundingClientRect();
+    const cssWidth = rect.width || usageChart.clientWidth || 640;
+    const cssHeight = rect.height || usageChart.clientHeight || 160;
+    return {
+      width: cssWidth > 0 ? cssWidth : 640,
+      height: cssHeight > 0 ? cssHeight : 160,
+    };
+  };
+
   const drawUsageChart = (store) => {
     if (!usageChart || !usageChart.getContext) return;
     const ctx = usageChart.getContext("2d");
@@ -198,8 +208,12 @@
       value: store[key]?.requests || 0,
     }));
 
-    const width = usageChart.width || 640;
-    const height = usageChart.height || 160;
+    const { width, height } = resolveChartSize();
+    const dpr = window.devicePixelRatio || 1;
+    usageChart.width = Math.max(1, Math.floor(width * dpr));
+    usageChart.height = Math.max(1, Math.floor(height * dpr));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
     if (points.length === 0) {
@@ -255,6 +269,12 @@
     renderUsageHistory(store);
   };
 
+  const refreshUsageChart = () => {
+    if (!usageChart) return;
+    const store = loadUsageStore();
+    drawUsageChart(store);
+  };
+
   const renderHistorySummary = () => {
     if (!historySummary) return;
     let items = [];
@@ -291,6 +311,11 @@
     usagePanels.forEach((panel) => {
       panel.hidden = panel.dataset.usagePanel !== name;
     });
+    if (name === "history") {
+      window.requestAnimationFrame(() => {
+        refreshUsageChart();
+      });
+    }
   };
 
   if (saveKeysBtn) {
