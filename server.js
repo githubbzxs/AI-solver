@@ -1,4 +1,4 @@
-// 服务入口：
+﻿// 服务入口：
 // 1) 提供静态页面（public/）
 // 2) 接收前端表单/图片并转发给 Gemini
 // 3) 把答案与用量信息返回给浏览器
@@ -184,6 +184,53 @@ const saveHistoryForUser = (user, prompt, answer, files) => {
   return historyId;
 };
 
+const normalizeModelName = (model) => {
+  const value = (model || DEFAULT_MODEL).trim();
+  const normalized = (value || DEFAULT_MODEL).replace(/^models\//, "");
+  return normalized || DEFAULT_MODEL;
+};
+
+// 统一构建解题请求入参，供普通/流式接口复用
+const buildSolvePayload = (req) => {
+  const apiKey = (req.body?.apiKey || process.env.GEMINI_API_KEY || "").trim();
+  const normalizedModel = normalizeModelName(req.body?.model || DEFAULT_MODEL);
+  const prompt = (req.body?.prompt || "").trim();
+  const files = Array.isArray(req.files) ? req.files : [];
+
+  if (!apiKey) {
+    return { error: { status: 400, message: "未提供 API Key。" } };
+  }
+
+  if (!prompt && files.length === 0) {
+    return { error: { status: 400, message: "请填写题目或上传图片。" } };
+  }
+
+  if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.mimetype))) {
+    return { error: { status: 400, message: "仅支持 PNG/JPEG/WebP 图片。" } };
+  }
+
+  const parts = [];
+  if (prompt) {
+    parts.push({ text: prompt });
+  }
+  files.forEach((file) => {
+    parts.push({
+      inline_data: {
+        mime_type: file.mimetype,
+        data: file.buffer.toString("base64"),
+      },
+    });
+  });
+
+  return {
+    apiKey,
+    parts,
+    normalizedModel,
+    prompt,
+    files,
+  };
+};
+
 app.use(express.json({ limit: "1mb" }));
 app.use(attachUser);
 app.use(express.static(path.join(__dirname, "public")));
@@ -356,7 +403,8 @@ app.post(
         model: normalizedModel,
       });
     } catch (err) {
-    return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
+      console.error("[/api/solve] unexpected error:", err);
+      return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
     }
   }
 );
@@ -485,6 +533,7 @@ app.post(
       if (err?.name === "AbortError") {
         return res.end();
       }
+      console.error("[/api/solve-stream] unexpected error:", err);
       return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
     }
   }
@@ -499,6 +548,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
 
 
 
