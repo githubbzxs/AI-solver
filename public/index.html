@@ -173,6 +173,55 @@
       </div>
     </div>
 
+    <!-- 登录弹窗：独立于设置弹窗 -->
+    <div class="modal login-modal" id="loginModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="login"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <h2>登录</h2>
+            <p class="modal-sub">登录后可保存历史记录</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="ghost small" data-close="login">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <section class="panel auth-panel">
+            <h2>账号</h2>
+            <div class="hint" id="authStatus">未登录</div>
+            <label class="field">
+              <span>邮箱</span>
+              <input
+                id="authEmail"
+                type="email"
+                autocomplete="username"
+                placeholder="you@example.com"
+              />
+            </label>
+            <label class="field">
+              <span>密码</span>
+              <input
+                id="authPassword"
+                type="password"
+                autocomplete="current-password"
+                placeholder="至少6位"
+              />
+            </label>
+            <div class="panel-actions auth-actions">
+              <button type="button" id="loginBtn">登录</button>
+              <button type="button" id="registerBtn" class="ghost">注册</button>
+            </div>
+            <div class="panel-actions">
+              <button type="button" id="logoutBtn" class="ghost" hidden>退出登录</button>
+            </div>
+            <div class="hint auth-message" id="authMessage"></div>
+            <div class="hint">登录后才会保存历史记录。</div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <!-- 设置弹窗：API Key/历史使用次数/历史记录 -->
     <div class="modal" id="settingsModal" aria-hidden="true">
       <div class="modal-backdrop" data-close="settings"></div>
@@ -188,38 +237,6 @@
         </div>
         <div class="modal-body">
           <div class="grid settings-grid">
-            <section class="panel auth-panel">
-              <h2>账号</h2>
-              <div class="hint" id="authStatus">未登录</div>
-              <label class="field">
-                <span>邮箱</span>
-                <input
-                  id="authEmail"
-                  type="email"
-                  autocomplete="username"
-                  placeholder="you@example.com"
-                />
-              </label>
-              <label class="field">
-                <span>密码</span>
-                <input
-                  id="authPassword"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="至少6位"
-                />
-              </label>
-              <div class="panel-actions auth-actions">
-                <button type="button" id="loginBtn">登录</button>
-                <button type="button" id="registerBtn" class="ghost">注册</button>
-              </div>
-              <div class="panel-actions">
-                <button type="button" id="logoutBtn" class="ghost" hidden>退出登录</button>
-              </div>
-              <div class="hint auth-message" id="authMessage"></div>
-              <div class="hint">登录后才会保存历史记录。</div>
-            </section>
-
             <section class="panel">
               <h2>API Key</h2>
               <label class="field">

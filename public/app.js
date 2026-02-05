@@ -28,6 +28,7 @@ const historyList = document.getElementById("historyList");
 const historyToggle = document.getElementById("historyToggle");
 const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
+const loginModal = document.getElementById("loginModal");
 const settingsModal = document.getElementById("settingsModal");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
@@ -709,7 +710,9 @@ const closeModal = (modal) => {
 };
 
 const openLoginModal = (message) => {
-  openModal(settingsModal);
+  closeModal(historyModal);
+  closeModal(settingsModal);
+  openModal(loginModal);
   if (message) {
     setAuthHint(message, "error");
   }
@@ -750,9 +753,20 @@ document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   });
 });
 
+document.querySelectorAll("[data-open=\"login\"]").forEach((btn) => {
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    openLoginModal();
+  });
+});
+
 // 点击遮罩或关闭按钮关闭弹窗
 document.querySelectorAll("[data-close=\"history\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(historyModal));
+});
+
+document.querySelectorAll("[data-close=\"login\"]").forEach((btn) => {
+  btn.addEventListener("click", () => closeModal(loginModal));
 });
 
 document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
@@ -763,6 +777,7 @@ document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeModal(historyModal);
+  closeModal(loginModal);
   closeModal(settingsModal);
 });
 
@@ -786,12 +801,18 @@ window.addEventListener("auth-changed", (event) => {
     renderHistory();
   }
   if (event?.detail) {
-    if (settingsModal && settingsModal.classList.contains("is-open")) {
-      closeModal(settingsModal);
+    if (loginModal && loginModal.classList.contains("is-open")) {
+      closeModal(loginModal);
     }
   } else {
     openLoginModal("请先登录后使用。");
   }
+});
+
+window.addEventListener("auth-required", (event) => {
+  const message = event?.detail?.message || "请先登录后使用。";
+  openLoginModal(message);
+  showNotice(message, "error");
 });
 
 window.addEventListener("history-updated", () => {

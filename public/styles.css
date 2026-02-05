@@ -883,6 +883,11 @@ button.paste-button {
   z-index: 2;
 }
 
+/* 登录弹窗尺寸更紧凑，避免空白过多 */
+.login-modal .modal-card {
+  width: min(520px, 92vw);
+}
+
 /* 弹窗进入动画 */
 .modal.is-open .modal-card {
   transform: translateY(0) scale(1);

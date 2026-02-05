@@ -634,7 +634,11 @@
   if (clearHistoryBtn) {
     clearHistoryBtn.addEventListener("click", async () => {
       if (!authState.user) {
-        setAuthMessage("请先登录后再清空历史记录。", "error");
+        const message = "请先登录后再清空历史记录。";
+        setAuthMessage(message, "error");
+        window.dispatchEvent(
+          new CustomEvent("auth-required", { detail: { message } })
+        );
         return;
       }
       setAuthMessage("正在清空历史记录...");
