@@ -41,6 +41,38 @@
 
       <!-- 设置面板：Key/使用次数/历史记录 -->
       <main class="grid settings-grid">
+        <section class="panel auth-panel">
+          <h2>账号</h2>
+          <div class="hint" id="authStatus">未登录</div>
+          <label class="field">
+            <span>邮箱</span>
+            <input
+              id="authEmail"
+              type="email"
+              autocomplete="username"
+              placeholder="you@example.com"
+            />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input
+              id="authPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="至少6位"
+            />
+          </label>
+          <div class="panel-actions auth-actions">
+            <button type="button" id="loginBtn">登录</button>
+            <button type="button" id="registerBtn" class="ghost">注册</button>
+          </div>
+          <div class="panel-actions">
+            <button type="button" id="logoutBtn" class="ghost" hidden>退出登录</button>
+          </div>
+          <div class="hint auth-message" id="authMessage"></div>
+          <div class="hint">登录后才会保存历史记录。</div>
+        </section>
+
         <section class="panel">
           <h2>API Key</h2>
           <label class="field">

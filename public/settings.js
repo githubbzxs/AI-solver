@@ -19,6 +19,14 @@
   const usageTabs = document.querySelectorAll("[data-usage-tab]");
   const usagePanels = document.querySelectorAll("[data-usage-panel]");
 
+  const authEmail = document.getElementById("authEmail");
+  const authPassword = document.getElementById("authPassword");
+  const authStatus = document.getElementById("authStatus");
+  const authMessage = document.getElementById("authMessage");
+  const loginBtn = document.getElementById("loginBtn");
+  const registerBtn = document.getElementById("registerBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+
   const clearHistoryBtn = document.getElementById("clearHistoryBtn");
   const historySummary = document.getElementById("historySummary");
 
@@ -29,7 +37,91 @@
     invalidKeys: "gemini_invalid_keys",
     chartZoom: "gemini_usage_zoom_hours",
     keysVisibility: "gemini_keys_visibility",
-    history: "gemini_history",
+  };
+
+  const authState = { user: null };
+
+  const fetchJson = async (url, options = {}) => {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      ...options,
+    });
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = null;
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        message: data?.error || "请求失败。",
+        data,
+      };
+    }
+    return { ok: true, status: response.status, data };
+  };
+
+  const setAuthMessage = (text, tone = "") => {
+    if (!authMessage) return;
+    authMessage.textContent = text || "";
+    if (tone) {
+      authMessage.dataset.tone = tone;
+    } else {
+      authMessage.removeAttribute("data-tone");
+    }
+  };
+
+  const renderAuthStatus = () => {
+    if (!authStatus) return;
+    if (authState.user) {
+      authStatus.textContent = `已登录：${authState.user.email}`;
+    } else {
+      authStatus.textContent = "未登录";
+    }
+    if (logoutBtn) {
+      logoutBtn.hidden = !authState.user;
+    }
+  };
+
+  const setAuthUser = (user) => {
+    authState.user = user || null;
+    renderAuthStatus();
+    renderHistorySummary();
+    window.dispatchEvent(new CustomEvent("auth-changed", { detail: authState.user }));
+  };
+
+  const refreshAuth = async () => {
+    const result = await fetchJson("/api/auth/me");
+    if (!result.ok) {
+      setAuthUser(null);
+      return;
+    }
+    setAuthUser(result.data?.user || null);
+  };
+
+  const submitAuth = async (mode) => {
+    if (!authEmail || !authPassword) return;
+    const email = authEmail.value.trim();
+    const password = authPassword.value.trim();
+    if (!email || !password) {
+      setAuthMessage("请输入邮箱和密码。", "error");
+      return;
+    }
+    setAuthMessage("正在处理...");
+    const result = await fetchJson(`/api/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!result.ok) {
+      setAuthMessage(result.message || "操作失败。", "error");
+      return;
+    }
+    authPassword.value = "";
+    setAuthMessage(mode === "register" ? "注册成功，已登录。" : "登录成功。");
+    setAuthUser(result.data?.user || null);
   };
 
   const maskKey = (key) => {
@@ -392,19 +484,23 @@
     drawUsageChart(store);
   };
 
-  const renderHistorySummary = () => {
+  function renderHistorySummary() {
     if (!historySummary) return;
-    let items = [];
-    try {
-      items = JSON.parse(localStorage.getItem(STORAGE.history) || "[]");
-    } catch (error) {
-      items = [];
+    if (!authState.user) {
+      historySummary.textContent = "请先登录后查看历史记录。";
+      return;
     }
-    const count = Array.isArray(items) ? items.length : 0;
-    historySummary.textContent = count
-      ? `已保存 ${count} 条历史记录。`
-      : "暂无历史记录。";
-  };
+    fetchJson("/api/history/summary").then((result) => {
+      if (!result.ok) {
+        historySummary.textContent = result.message || "历史记录读取失败。";
+        return;
+      }
+      const count = Number(result.data?.count || 0);
+      historySummary.textContent = count
+        ? `已保存 ${count} 条历史记录。`
+        : "暂无历史记录。";
+    });
+  }
 
   const openModal = (modal) => {
     if (!modal) return;
@@ -434,6 +530,39 @@
       });
     }
   };
+
+  if (loginBtn) {
+    loginBtn.addEventListener("click", () => {
+      submitAuth("login");
+    });
+  }
+
+  if (registerBtn) {
+    registerBtn.addEventListener("click", () => {
+      submitAuth("register");
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      setAuthMessage("正在退出...");
+      const result = await fetchJson("/api/auth/logout", { method: "POST" });
+      if (!result.ok) {
+        setAuthMessage(result.message || "退出失败。", "error");
+        return;
+      }
+      setAuthUser(null);
+      setAuthMessage("已退出登录。");
+      window.dispatchEvent(new Event("history-updated"));
+    });
+  }
+
+  if (authPassword) {
+    authPassword.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      submitAuth("login");
+    });
+  }
 
   if (saveKeysBtn) {
     saveKeysBtn.addEventListener("click", () => {
@@ -498,10 +627,25 @@
     renderKeys();
   });
 
+  window.addEventListener("history-updated", () => {
+    renderHistorySummary();
+  });
+
   if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener("click", () => {
-      localStorage.setItem(STORAGE.history, "[]");
+    clearHistoryBtn.addEventListener("click", async () => {
+      if (!authState.user) {
+        setAuthMessage("请先登录后再清空历史记录。", "error");
+        return;
+      }
+      setAuthMessage("正在清空历史记录...");
+      const result = await fetchJson("/api/history", { method: "DELETE" });
+      if (!result.ok) {
+        setAuthMessage(result.message || "清空失败。", "error");
+        return;
+      }
+      setAuthMessage("历史记录已清空。");
       renderHistorySummary();
+      window.dispatchEvent(new Event("history-updated"));
     });
   }
 
@@ -512,7 +656,12 @@
     renderKeys();
     renderUsageAll();
     updateChartControls();
-    renderHistorySummary();
+    refreshAuth();
     applyKeysVisibility(getKeysVisibility());
   });
+
+  window.AISolverAuth = {
+    getUser: () => authState.user,
+    refresh: refreshAuth,
+  };
 })();

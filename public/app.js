@@ -25,7 +25,6 @@ const spinner = document.getElementById("spinner");
 const pasteBtn = document.getElementById("pasteBtn");
 const notice = document.getElementById("notice");
 const historyList = document.getElementById("historyList");
-const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const historyToggle = document.getElementById("historyToggle");
 const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
@@ -37,7 +36,6 @@ const STORAGE = {
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
   invalidKeys: "gemini_invalid_keys",
-  history: "gemini_history",
 };
 
 // 从 localStorage 读取保存的 API Key 列表（JSON 字符串）
@@ -169,6 +167,32 @@ const renderMarkdown = (text) => {
     return map[ch] || ch;
   });
 };
+
+const fetchJson = async (url, options = {}) => {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      message: data?.error || "请求失败。",
+      data,
+    };
+  }
+  return { ok: true, status: response.status, data };
+};
+
+const getAuthUser = () =>
+  (window.AISolverAuth && window.AISolverAuth.getUser && window.AISolverAuth.getUser()) ||
+  null;
 
 const parseSseEvent = (block) => {
   const lines = block.split(/\r?\n/);
@@ -333,19 +357,25 @@ const applyPaste = (text) => {
   showNotice("已粘贴");
 };
 
-// 从 localStorage 读取历史记录
-const loadHistory = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE.history);
-    return raw ? JSON.parse(raw) : [];
-  } catch (error) {
-    return [];
-  }
+let currentUser = null;
+
+const setCurrentUser = (user) => {
+  currentUser = user || null;
 };
 
-// 保存历史记录到 localStorage
-const saveHistory = (items) => {
-  localStorage.setItem(STORAGE.history, JSON.stringify(items));
+const renderHistoryEmpty = (message) => {
+  historyList.innerHTML = "";
+  const empty = document.createElement("div");
+  empty.className = "history-empty";
+  empty.textContent = message;
+  historyList.appendChild(empty);
+};
+
+const formatHistoryTime = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("zh-CN", { hour12: false });
 };
 
 // 当前预览图与已选择图片（仅在内存中维护）
@@ -439,19 +469,28 @@ const updateDropzone = () => {
 };
 
 // 渲染历史记录列表（使用 <details> 展开/折叠）
-const renderHistory = () => {
-  const items = loadHistory();
-  historyList.innerHTML = "";
-  // 空列表时给一个占位提示
-  if (items.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "history-empty";
-    empty.textContent = "暂无记录";
-    historyList.appendChild(empty);
+const renderHistory = async () => {
+  if (!historyList) return;
+  const user = getAuthUser();
+  if (!user) {
+    renderHistoryEmpty("请先登录后查看历史记录。");
     return;
   }
 
-  // 使用 <details>/<summary> 让每条记录可展开
+  const result = await fetchJson("/api/history");
+  if (!result.ok) {
+    renderHistoryEmpty(result.message || "历史记录加载失败。");
+    return;
+  }
+
+  const items = Array.isArray(result.data?.items) ? result.data.items : [];
+  if (items.length === 0) {
+    renderHistoryEmpty("暂无记录");
+    return;
+  }
+
+  historyList.innerHTML = "";
+
   items.forEach((item) => {
     const card = document.createElement("details");
     card.className = "history-item";
@@ -460,7 +499,7 @@ const renderHistory = () => {
     summary.className = "history-summary";
 
     const summaryLeft = document.createElement("span");
-    summaryLeft.textContent = item.time;
+    summaryLeft.textContent = formatHistoryTime(item.time);
 
     const summaryRight = document.createElement("span");
     summaryRight.className = "history-open";
@@ -478,41 +517,32 @@ const renderHistory = () => {
     answer.textContent = `答案：${item.answer || "（无回答）"}`;
 
     card.appendChild(summary);
-    const imageNames = Array.isArray(item.imageName)
-      ? item.imageName
-      : item.imageName
-      ? [item.imageName]
-      : [];
-    if (imageNames.length) {
-      const img = document.createElement("div");
-      img.className = "history-meta";
-      img.textContent = `图片：${imageNames.join("、")}`;
-      card.appendChild(img);
+
+    const images = Array.isArray(item.images) ? item.images : [];
+    if (images.length) {
+      const meta = document.createElement("div");
+      meta.className = "history-meta";
+      meta.textContent = `图片：${images.map((image) => image.name).join("、")}`;
+      card.appendChild(meta);
+
+      const gallery = document.createElement("div");
+      gallery.className = "history-images";
+      images.forEach((image) => {
+        const img = document.createElement("img");
+        img.src = image.url;
+        img.alt = `历史图片：${image.name || "图片"}`;
+        img.loading = "lazy";
+        gallery.appendChild(img);
+      });
+      card.appendChild(gallery);
     }
+
     card.appendChild(prompt);
     card.appendChild(answer);
     historyList.appendChild(card);
   });
 
   renderMath(historyList);
-};
-
-// 新增一条历史记录，并限制总数量
-const addHistory = ({ prompt, answer, imageName }) => {
-  const items = loadHistory();
-  // 使用本地时间字符串便于用户阅读
-  const time = new Date().toLocaleString("zh-CN", { hour12: false });
-  const entry = {
-    id: Date.now(),
-    time,
-    prompt,
-    answer,
-    imageName,
-  };
-  // 最新的放在最前，最多保留 20 条
-  const updated = [entry, ...items].slice(0, 20);
-  saveHistory(updated);
-  renderHistory();
 };
 
 // 记录用量：按天、按 Key 汇总，便于设置页展示
@@ -641,11 +671,6 @@ pasteBtn.addEventListener("click", async () => {
   }
 });
 
-// 清空历史记录
-clearHistoryBtn.addEventListener("click", () => {
-  saveHistory([]);
-  renderHistory();
-});
 
 // 展开/收起错误详情
 errorToggle.addEventListener("click", () => {
@@ -673,6 +698,7 @@ const closeModal = (modal) => {
 // 顶部按钮打开弹窗
 if (historyToggle) {
   historyToggle.addEventListener("click", () => {
+    renderHistory();
     openModal(historyModal);
   });
 }
@@ -714,6 +740,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   renderHistory();
   updateDropzone();
+});
+
+window.addEventListener("auth-changed", () => {
+  if (historyModal && historyModal.classList.contains("is-open")) {
+    renderHistory();
+  }
+});
+
+window.addEventListener("history-updated", () => {
+  if (historyModal && historyModal.classList.contains("is-open")) {
+    renderHistory();
+  }
 });
 
 // 监听系统粘贴事件：若是图片则直接加入预览
@@ -841,11 +879,14 @@ form.addEventListener("submit", async (event) => {
         answerBox.innerHTML = renderMarkdown(finalAnswer);
         renderMath(answerBox);
         recordUsage(apiKey, result.usage);
-        addHistory({
-          prompt,
-          answer: finalAnswer,
-          imageName: files.length ? files.map((file) => file.name) : [],
-        });
+        if (getAuthUser()) {
+          window.dispatchEvent(new Event("history-updated"));
+          if (historyModal && historyModal.classList.contains("is-open")) {
+            renderHistory();
+          }
+        } else {
+          showNotice("未登录，本次不保存历史记录", "error");
+        }
         setStatus("完成", false);
         solved = true;
         break;
