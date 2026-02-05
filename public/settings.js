@@ -73,6 +73,32 @@
     }
   };
 
+  const syncAuthControls = () => {
+    const loggedIn = Boolean(authState.user);
+
+    if (loginBtn) {
+      loginBtn.hidden = loggedIn;
+    }
+    if (registerBtn) {
+      registerBtn.hidden = loggedIn;
+    }
+    if (logoutBtn) {
+      logoutBtn.hidden = !loggedIn;
+    }
+    if (authEmail) {
+      authEmail.disabled = loggedIn;
+      if (loggedIn && authState.user?.email) {
+        authEmail.value = authState.user.email;
+      }
+    }
+    if (authPassword) {
+      authPassword.disabled = loggedIn;
+      if (loggedIn) {
+        authPassword.value = "";
+      }
+    }
+  };
+
   const renderAuthStatus = () => {
     if (!authStatus) return;
     if (authState.user) {
@@ -80,13 +106,14 @@
     } else {
       authStatus.textContent = "未登录";
     }
-    if (logoutBtn) {
-      logoutBtn.hidden = !authState.user;
-    }
+    syncAuthControls();
   };
 
   const setAuthUser = (user) => {
     authState.user = user || null;
+    if (authState.user) {
+      setAuthMessage("");
+    }
     renderAuthStatus();
     renderHistorySummary();
     window.dispatchEvent(new CustomEvent("auth-changed", { detail: authState.user }));
@@ -103,6 +130,12 @@
 
   const submitAuth = async (mode) => {
     if (!authEmail || !authPassword) return;
+    if (authState.user) {
+      setAuthMessage(
+        `当前已登录：${authState.user.email}。如需切换账号，请先退出登录。`
+      );
+      return;
+    }
     const email = authEmail.value.trim();
     const password = authPassword.value.trim();
     if (!email || !password) {

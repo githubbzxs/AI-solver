@@ -715,6 +715,8 @@ const openLoginModal = (message) => {
   openModal(loginModal);
   if (message) {
     setAuthHint(message, "error");
+  } else {
+    setAuthHint("");
   }
   if (authEmail) {
     authEmail.focus();
