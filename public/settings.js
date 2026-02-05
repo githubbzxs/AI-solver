@@ -15,6 +15,9 @@
   const usageHistorySummary = document.getElementById("usageHistorySummary");
   const usageHistoryList = document.getElementById("usageHistoryList");
   const usageChart = document.getElementById("usageChart");
+  const chartZoomInBtn = document.getElementById("chartZoomIn");
+  const chartZoomOutBtn = document.getElementById("chartZoomOut");
+  const chartRangeLabel = document.getElementById("chartRangeLabel");
   const usageTabs = document.querySelectorAll("[data-usage-tab]");
   const usagePanels = document.querySelectorAll("[data-usage-panel]");
 
@@ -26,6 +29,7 @@
     usage: "gemini_usage",
     keyIndex: "gemini_key_index",
     invalidKeys: "gemini_invalid_keys",
+    chartZoom: "gemini_usage_zoom_hours",
     keysVisibility: "gemini_keys_visibility",
     history: "gemini_history",
   };
@@ -148,6 +152,40 @@
 
   const getDayKey = (date) => date.toISOString().slice(0, 10);
 
+  const ZOOM_STEPS = [6, 12, 24, 48, 72, 168];
+
+  const normalizeZoomHours = (value) => {
+    if (ZOOM_STEPS.includes(value)) return value;
+    if (!Number.isFinite(value)) return 24;
+    let closest = ZOOM_STEPS[0];
+    let minDiff = Math.abs(value - closest);
+    ZOOM_STEPS.forEach((step) => {
+      const diff = Math.abs(value - step);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = step;
+      }
+    });
+    return closest;
+  };
+
+  const loadChartWindow = () => {
+    const raw = Number.parseInt(localStorage.getItem(STORAGE.chartZoom) || "", 10);
+    return normalizeZoomHours(raw);
+  };
+
+  let chartWindowHours = loadChartWindow();
+
+  const updateChartControls = () => {
+    if (chartRangeLabel) {
+      chartRangeLabel.textContent = `近${chartWindowHours}小时`;
+    }
+    const minStep = ZOOM_STEPS[0];
+    const maxStep = ZOOM_STEPS[ZOOM_STEPS.length - 1];
+    if (chartZoomInBtn) chartZoomInBtn.disabled = chartWindowHours <= minStep;
+    if (chartZoomOutBtn) chartZoomOutBtn.disabled = chartWindowHours >= maxStep;
+  };
+
   const loadUsageStore = () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE.usage) || "{}");
@@ -249,22 +287,29 @@
     };
   };
 
+  const buildHourlySeries = (store, hours) => {
+    const now = new Date();
+    const totalHours = Math.max(1, hours);
+    const points = [];
+    for (let i = totalHours - 1; i >= 0; i -= 1) {
+      const time = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const dayKey = getDayKey(time);
+      const hourKey = String(time.getHours()).padStart(2, "0");
+      const value = store?.[dayKey]?.perHour?.[hourKey] || 0;
+      points.push({
+        label: `${hourKey}:00`,
+        value,
+      });
+    }
+    return points;
+  };
+
   const drawUsageChart = (store) => {
     if (!usageChart || !usageChart.getContext) return;
     const ctx = usageChart.getContext("2d");
     if (!ctx) return;
 
-    const todayKey = getDayKey(new Date());
-    const keys = Object.keys(store)
-      .filter((key) => key !== todayKey)
-      .sort();
-
-    const fallbackKeys = store[todayKey] ? [todayKey] : [];
-    const chartKeys = keys.length ? keys : fallbackKeys;
-    const points = chartKeys.map((key) => ({
-      label: key,
-      value: store[key]?.requests || 0,
-    }));
+    const points = buildHourlySeries(store, chartWindowHours);
 
     const { width, height } = resolveChartSize();
     const dpr = window.devicePixelRatio || 1;
@@ -274,11 +319,7 @@
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    if (points.length === 0) {
-      usageChart.hidden = true;
-      return;
-    }
-
+    if (points.length === 0) return;
     usageChart.hidden = false;
     const colors = getChartColors();
     const padding = 16;
@@ -320,6 +361,29 @@
     });
   };
 
+  const setChartWindow = (hours) => {
+    chartWindowHours = normalizeZoomHours(hours);
+    localStorage.setItem(STORAGE.chartZoom, String(chartWindowHours));
+    updateChartControls();
+    refreshUsageChart();
+  };
+
+  const getZoomIndex = () => ZOOM_STEPS.indexOf(chartWindowHours);
+
+  const zoomIn = () => {
+    const idx = getZoomIndex();
+    if (idx > 0) {
+      setChartWindow(ZOOM_STEPS[idx - 1]);
+    }
+  };
+
+  const zoomOut = () => {
+    const idx = getZoomIndex();
+    if (idx >= 0 && idx < ZOOM_STEPS.length - 1) {
+      setChartWindow(ZOOM_STEPS[idx + 1]);
+    }
+  };
+
   const renderUsageAll = () => {
     const store = loadUsageStore();
     renderUsageTotal(store);
@@ -329,6 +393,7 @@
 
   const refreshUsageChart = () => {
     if (!usageChart) return;
+    updateChartControls();
     const store = loadUsageStore();
     drawUsageChart(store);
   };
@@ -416,6 +481,33 @@
     });
   });
 
+  if (chartZoomInBtn) {
+    chartZoomInBtn.addEventListener("click", () => {
+      zoomIn();
+    });
+  }
+
+  if (chartZoomOutBtn) {
+    chartZoomOutBtn.addEventListener("click", () => {
+      zoomOut();
+    });
+  }
+
+  if (usageChart) {
+    usageChart.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        if (event.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      },
+      { passive: false }
+    );
+  }
+
   document.querySelectorAll('[data-close="usage"]').forEach((btn) => {
     btn.addEventListener("click", () => closeModal(usageModal));
   });
@@ -437,6 +529,7 @@
     }
     renderKeys();
     renderUsageAll();
+    updateChartControls();
     renderHistorySummary();
     applyKeysVisibility(getKeysVisibility());
   });

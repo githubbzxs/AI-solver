@@ -392,6 +392,7 @@ const recordUsage = (key, usage) => {
   const now = new Date();
   // 以日期（YYYY-MM-DD）作为存储 key，便于按天统计
   const dayKey = now.toISOString().slice(0, 10);
+  const hourKey = String(now.getHours()).padStart(2, "0");
   // API 返回结构可能不同，这里兼容总 token 或拆分 token
   const totalTokens =
     usage?.totalTokenCount ||
@@ -409,6 +410,10 @@ const recordUsage = (key, usage) => {
   const today = store[dayKey] || { requests: 0, tokens: 0, perKey: {} };
   today.requests += 1;
   today.tokens += totalTokens || 0;
+  if (!today.perHour) {
+    today.perHour = {};
+  }
+  today.perHour[hourKey] = (today.perHour[hourKey] || 0) + 1;
 
   // 按 Key 再细分统计（Key 使用脱敏形式）
   const label = maskKey(key);
@@ -653,20 +658,23 @@ form.addEventListener("submit", async (event) => {
 
     const isKeyError = (status, message) => {
       const text = (message || "").toLowerCase();
-      if (status === 401 || status === 403) return true;
+      if (status === 401 || status === 403 || status === 429) return true;
       if (text.includes("api key") || text.includes("apikey")) return true;
       if (text.includes("key") && (text.includes("invalid") || text.includes("expired"))) {
         return true;
       }
+      if (text.includes("quota") || text.includes("resource exhausted")) return true;
       if (text.includes("permission") || text.includes("unauthorized")) return true;
       return false;
     };
 
     const getInvalidReason = (status, message) => {
       const text = (message || "").toLowerCase();
+      if (text.includes("quota") || text.includes("resource exhausted")) return "配额不足";
       if (text.includes("expired")) return "已过期";
       if (text.includes("not valid") || text.includes("invalid")) return "无效";
       if (text.includes("permission") || text.includes("unauthorized")) return "无权限";
+      if (status === 429) return "配额不足";
       if (status === 401 || status === 403) return "无效";
       return "不可用";
     };
