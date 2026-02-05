@@ -16,6 +16,7 @@ const app = express();
 const MAX_IMAGES = 6;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const DEFAULT_MODEL = "gemini-3-flash-preview";
+const API_VERSION = "v1beta";
 // multer 解析 multipart/form-data；内存存储便于直接转 base64
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,6 +24,47 @@ const upload = multer({
 });
 
 // 静态资源服务：让浏览器直接访问 public/ 目录
+const buildSolvePayload = (req) => {
+  const apiKey = (req.body.apiKey || process.env.GEMINI_API_KEY || "").trim();
+  const prompt = (req.body.prompt || "").trim();
+  const files = req.files || [];
+
+  if (!apiKey) {
+    return { error: { status: 400, message: "Missing API key." } };
+  }
+  if (!prompt && files.length === 0) {
+    return { error: { status: 400, message: "Provide text or an image." } };
+  }
+  if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.mimetype))) {
+    return {
+      error: { status: 400, message: "Only PNG, JPEG, or WebP images are supported." },
+    };
+  }
+
+  const parts = [];
+  if (prompt) {
+    parts.push({ text: prompt });
+  }
+  files.forEach((file) => {
+    parts.push({
+      inline_data: {
+        mime_type: file.mimetype,
+        data: file.buffer.toString("base64"),
+      },
+    });
+  });
+
+  const normalizedModel = DEFAULT_MODEL.replace(/^models\//, "");
+
+  return {
+    apiKey,
+    prompt,
+    files,
+    parts,
+    normalizedModel,
+  };
+};
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
@@ -108,6 +150,119 @@ app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
 });
 
 // 健康检查：部署或监控可用来探活
+app.post("/api/solve-stream", upload.array("image", MAX_IMAGES), async (req, res) => {
+  let controller = null;
+
+  try {
+    const payload = buildSolvePayload(req);
+    if (payload.error) {
+      return res.status(payload.error.status).json({ error: payload.error.message });
+    }
+
+    const { apiKey, parts, normalizedModel } = payload;
+    const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
+      normalizedModel
+    )}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+    controller = new AbortController();
+    req.on("close", () => {
+      if (controller) controller.abort();
+    });
+
+    const upstream = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!upstream.ok) {
+      let errorData = null;
+      try {
+        errorData = await upstream.json();
+      } catch (error) {
+        errorData = null;
+      }
+      const message = errorData?.error?.message || "Gemini API error.";
+      return res.status(upstream.status).json({ error: message, details: errorData });
+    }
+
+    if (!upstream.body) {
+      return res.status(502).json({ error: "Empty stream response." });
+    }
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let usage = null;
+
+    const sendEvent = (type, data) => {
+      res.write(`event: ${type}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const handleChunk = (raw) => {
+      const lines = raw.split(/\r?\n/);
+      const dataLines = lines
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .filter(Boolean);
+
+      if (dataLines.length === 0) return;
+
+      const dataText = dataLines.join("\n");
+      if (!dataText || dataText === "[DONE]") return;
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(dataText);
+      } catch (error) {
+        return;
+      }
+
+      if (parsed?.usageMetadata) {
+        usage = parsed.usageMetadata;
+      }
+
+      const text = (parsed?.candidates?.[0]?.content?.parts || [])
+        .map((part) => part.text || "")
+        .join("");
+
+      if (text) {
+        sendEvent("chunk", { text });
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\n\n/);
+      buffer = blocks.pop() || "";
+      blocks.forEach(handleChunk);
+    }
+
+    if (buffer.trim()) {
+      handleChunk(buffer);
+    }
+
+    sendEvent("done", { usage, model: normalizedModel });
+    return res.end();
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      return res.end();
+    }
+    return res.status(500).json({ error: "Server error.", details: String(err) });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });

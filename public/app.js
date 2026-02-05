@@ -2,7 +2,7 @@
   前端主逻辑：
   - 处理文字/图片输入与预览
   - 管理剪贴板粘贴
-  - 调用后端 /api/solve 并渲染答案
+  - 调用后端 /api/solve-stream 并渲染答案
   - 记录历史与用量统计
 */
 
@@ -168,6 +168,134 @@ const renderMarkdown = (text) => {
     const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
     return map[ch] || ch;
   });
+};
+
+const parseSseEvent = (block) => {
+  const lines = block.split(/\r?\n/);
+  let eventType = "message";
+  const dataLines = [];
+  lines.forEach((line) => {
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trim() || "message";
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trim());
+    }
+  });
+  if (dataLines.length === 0) return null;
+  return {
+    event: eventType,
+    data: dataLines.join("\n"),
+  };
+};
+
+const streamSolve = async (formData, onChunk) => {
+  const response = await fetch("/api/solve-stream", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorMessage = "请求失败。";
+    let details = null;
+    try {
+      const data = await response.json();
+      details = data;
+      if (data?.error) errorMessage = data.error;
+    } catch (error) {
+      details = null;
+    }
+    return {
+      ok: false,
+      status: response.status,
+      message: errorMessage,
+      details,
+    };
+  }
+
+  if (!response.body) {
+    return { ok: false, status: 0, message: "浏览器不支持流式响应。" };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let answer = "";
+  let usage = null;
+  let model = null;
+  let streamError = null;
+
+  const handleEvent = (evt) => {
+    if (!evt) return;
+    if (evt.event === "chunk") {
+      let payload = null;
+      try {
+        payload = JSON.parse(evt.data);
+      } catch (error) {
+        payload = null;
+      }
+      const text = payload?.text || "";
+      if (!text) return;
+      answer += text;
+      if (onChunk) onChunk(text, answer);
+      return;
+    }
+    if (evt.event === "done") {
+      let payload = null;
+      try {
+        payload = JSON.parse(evt.data);
+      } catch (error) {
+        payload = null;
+      }
+      if (payload?.usage) usage = payload.usage;
+      if (payload?.model) model = payload.model;
+      return;
+    }
+    if (evt.event === "error") {
+      let payload = null;
+      try {
+        payload = JSON.parse(evt.data);
+      } catch (error) {
+        payload = null;
+      }
+      streamError = {
+        status: payload?.status || response.status,
+        message: payload?.message || "请求失败。",
+        details: payload?.details || null,
+      };
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\n\n/);
+    buffer = blocks.pop() || "";
+    blocks.forEach((block) => handleEvent(parseSseEvent(block)));
+    if (streamError) break;
+  }
+
+  if (!streamError && buffer.trim()) {
+    handleEvent(parseSseEvent(buffer));
+  }
+
+  if (streamError) {
+    return {
+      ok: false,
+      status: streamError.status,
+      message: streamError.message,
+      details: streamError.details,
+    };
+  }
+
+  return {
+    ok: true,
+    answer,
+    usage,
+    model,
+  };
 };
 
 // 粘贴/选择单张图片时的快捷处理
@@ -688,17 +816,20 @@ form.addEventListener("submit", async (event) => {
       });
 
       try {
-        const response = await fetch("/api/solve", {
-          method: "POST",
-          body: formData,
+        let started = false;
+        const result = await streamSolve(formData, (_delta, fullText) => {
+          if (!started) {
+            answerBox.textContent = "";
+            started = true;
+          }
+          answerBox.textContent = fullText;
         });
-        const data = await response.json();
 
-        if (!response.ok) {
-          const message = data.error || "请求失败。";
+        if (!result.ok) {
+          const message = result.message || "请求失败。";
           lastError = message;
-          if (isKeyError(response.status, message)) {
-            markInvalidKey(apiKey, getInvalidReason(response.status, message));
+          if (isKeyError(result.status, message)) {
+            markInvalidKey(apiKey, getInvalidReason(result.status, message));
           }
           continue;
         }
@@ -706,13 +837,13 @@ form.addEventListener("submit", async (event) => {
         clearInvalidKey(apiKey);
         setNextKeyIndex(keys, apiKey);
 
-        const answerText = data.answer || "暂无返回内容。";
-        answerBox.innerHTML = renderMarkdown(answerText);
+        const finalAnswer = result.answer || "暂无返回内容。";
+        answerBox.innerHTML = renderMarkdown(finalAnswer);
         renderMath(answerBox);
-        recordUsage(apiKey, data.usage);
+        recordUsage(apiKey, result.usage);
         addHistory({
           prompt,
-          answer: data.answer,
+          answer: finalAnswer,
           imageName: files.length ? files.map((file) => file.name) : [],
         });
         setStatus("完成", false);
