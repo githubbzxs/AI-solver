@@ -231,16 +231,55 @@ const buildSolvePayload = (req) => {
   };
 };
 
-// 兼容 Gemini 返回对象或数组两种形态，统一提取文本
+const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+// 兼容 Gemini/OpenAI 风格响应，尽可能稳健地提取文本
 const extractTextFromResponse = (payload) => {
-  const list = Array.isArray(payload) ? payload : [payload];
-  return list
-    .flatMap((item) => (Array.isArray(item?.candidates) ? item.candidates : []))
-    .flatMap((candidate) =>
-      Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []
-    )
-    .map((part) => part?.text || "")
-    .join("");
+  const rootList = asArray(payload);
+  const texts = [];
+
+  const pushText = (value) => {
+    if (typeof value !== "string") return;
+    if (!value) return;
+    texts.push(value);
+  };
+
+  const extractFromParts = (parts) => {
+    asArray(parts).forEach((part) => {
+      pushText(part?.text);
+      pushText(part?.inlineText);
+    });
+  };
+
+  const extractFromCandidates = (candidates) => {
+    asArray(candidates).forEach((candidate) => {
+      extractFromParts(candidate?.content?.parts);
+      extractFromParts(candidate?.parts);
+      pushText(candidate?.text);
+      pushText(candidate?.outputText);
+    });
+  };
+
+  rootList.forEach((item) => {
+    if (!item) return;
+
+    extractFromCandidates(item?.candidates);
+    extractFromCandidates(item?.response?.candidates);
+    extractFromCandidates(item?.data?.candidates);
+
+    asArray(item?.choices).forEach((choice) => {
+      pushText(choice?.delta?.content);
+      pushText(choice?.message?.content);
+      asArray(choice?.delta?.content).forEach((chunk) => pushText(chunk?.text));
+      asArray(choice?.message?.content).forEach((chunk) => pushText(chunk?.text));
+    });
+
+    pushText(item?.text);
+    pushText(item?.response?.text);
+    pushText(item?.output_text);
+  });
+
+  return texts.join("");
 };
 
 const safeJsonParse = (text) => {
@@ -272,6 +311,35 @@ const parseSsePayloads = (rawBlock) => {
     .filter((line) => line && line !== "[DONE]")
     .map((line) => safeJsonParse(line))
     .filter((item) => item !== null);
+};
+
+const callGenerateContent = async ({ apiKey, normalizedModel, parts, signal }) => {
+  const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
+    normalizedModel
+  )}:generateContent?key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+    }),
+    signal,
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const message = data?.error?.message || "Gemini API error.";
+    return { ok: false, status: response.status, message, data };
+  }
+
+  return { ok: true, status: response.status, data };
 };
 
 app.use(express.json({ limit: "1mb" }));
@@ -406,24 +474,11 @@ app.post(
       }
 
       const { apiKey, parts, normalizedModel, prompt, files } = payload;
-      const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
-        normalizedModel
-      )}:generateContent?key=${apiKey}`;
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts }],
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const message = data?.error?.message || "Gemini API error.";
-        return res.status(response.status).json({ error: message, details: data });
+      const result = await callGenerateContent({ apiKey, normalizedModel, parts });
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.message, details: result.data });
       }
+      const data = result.data || {};
 
       const answer = extractTextFromResponse(data).trim();
 
@@ -508,6 +563,7 @@ app.post(
     let buffer = "";
     let usage = null;
     let answerText = "";
+    let lastParsedPayload = null;
 
     const sendEvent = (type, data) => {
       res.write(`event: ${type}\n`);
@@ -522,6 +578,7 @@ app.post(
       if (payloads.length === 0) return;
 
       payloads.forEach((parsed) => {
+        lastParsedPayload = parsed;
         const list = Array.isArray(parsed) ? parsed : [parsed];
         list.forEach((item) => {
           if (item?.usageMetadata) {
@@ -547,6 +604,47 @@ app.post(
 
     if (buffer.trim()) {
       handleChunk(buffer);
+    }
+
+    // 若上游流式未返回可显示文本，补一次非流式请求兜底，避免前端出现空答案
+    if (!answerText.trim()) {
+      const fallback = await callGenerateContent({
+        apiKey,
+        normalizedModel,
+        parts,
+        signal: controller.signal,
+      });
+      if (!fallback.ok) {
+        sendEvent("error", {
+          status: fallback.status,
+          message: fallback.message || "请求失败。",
+          details: fallback.data || lastParsedPayload || null,
+        });
+        return res.end();
+      }
+
+      const fallbackText = extractTextFromResponse(fallback.data).trim();
+      if (!fallbackText) {
+        const blockReason =
+          fallback.data?.promptFeedback?.blockReason ||
+          lastParsedPayload?.promptFeedback?.blockReason ||
+          null;
+        const message = blockReason
+          ? `模型未返回可显示文本（${blockReason}）。`
+          : "模型未返回可显示文本。";
+        sendEvent("error", {
+          status: 502,
+          message,
+          details: fallback.data || lastParsedPayload || null,
+        });
+        return res.end();
+      }
+
+      answerText = fallbackText;
+      if (fallback.data?.usageMetadata) {
+        usage = fallback.data.usageMetadata;
+      }
+      sendEvent("chunk", { text: fallbackText });
     }
 
     if (req.user && answerText.trim()) {
