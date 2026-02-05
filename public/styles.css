@@ -1013,6 +1013,12 @@ body[data-theme="dark"] .usage-chart {
   background: rgba(255, 255, 255, 0.6);
 }
 
+.key-pill.invalid {
+  border-color: rgba(139, 29, 29, 0.4);
+  color: #8b1d1d;
+  background: rgba(255, 235, 235, 0.7);
+}
+
 /* 用量汇总文字 */
 .usage-summary {
   font-size: 0.95rem;
@@ -1077,6 +1083,12 @@ body[data-theme="dark"] .history-item,
 body[data-theme="dark"] .history-block,
 body[data-theme="dark"] .dropzone {
   background: rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme="dark"] .key-pill.invalid {
+  color: #f2cfcf;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(68, 30, 30, 0.35);
 }
 
 body[data-theme="dark"] .badge {

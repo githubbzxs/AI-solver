@@ -25,6 +25,7 @@
     keys: "gemini_api_keys",
     usage: "gemini_usage",
     keyIndex: "gemini_key_index",
+    invalidKeys: "gemini_invalid_keys",
     keysVisibility: "gemini_keys_visibility",
     history: "gemini_history",
   };
@@ -43,6 +44,50 @@
     } catch (error) {
       return [];
     }
+  };
+
+  const loadInvalidKeys = () => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE.invalidKeys) || "{}");
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const saveInvalidKeys = (map) => {
+    localStorage.setItem(STORAGE.invalidKeys, JSON.stringify(map));
+  };
+
+  const syncInvalidKeys = (keys) => {
+    const map = loadInvalidKeys();
+    const normalized = new Set(keys.map((key) => key.trim()));
+    const next = {};
+    Object.entries(map).forEach(([key, value]) => {
+      if (normalized.has(key)) {
+        next[key] = value;
+      }
+    });
+    if (Object.keys(next).length !== Object.keys(map).length) {
+      saveInvalidKeys(next);
+    }
+    return next;
+  };
+
+  const getKeyIndex = (length) => {
+    const rawIndex = Number.parseInt(
+      localStorage.getItem(STORAGE.keyIndex) || "0",
+      10
+    );
+    if (!Number.isFinite(length) || length <= 0) return 0;
+    const safeIndex = Number.isNaN(rawIndex) ? 0 : rawIndex;
+    return ((safeIndex % length) + length) % length;
+  };
+
+  const buildKeyQueue = (keys, invalidMap) => {
+    const startIndex = getKeyIndex(keys.length);
+    const rotated = keys.slice(startIndex).concat(keys.slice(0, startIndex));
+    const validKeys = rotated.filter((key) => !invalidMap[key.trim()]);
+    return validKeys.length ? validKeys : rotated;
   };
 
   const saveKeys = (keys) => {
@@ -71,26 +116,32 @@
   const renderKeys = () => {
     if (!keysInput || !keysSummary || !keyList) return;
     const keys = loadKeys();
+    const invalidMap = syncInvalidKeys(keys);
+    const invalidCount = Object.keys(invalidMap).length;
     keysInput.value = keys.join("\n");
 
     if (keys.length === 0) {
       keysSummary.textContent = "暂无 Key。";
     } else {
-      const rawIndex = Number.parseInt(
-        localStorage.getItem(STORAGE.keyIndex) || "0",
-        10
-      );
-      const nextIndex = Number.isNaN(rawIndex) ? 0 : rawIndex % keys.length;
-      keysSummary.textContent = `已保存 ${keys.length} 个 Key，下一个：${maskKey(
-        keys[nextIndex]
-      )}`;
+      const queue = buildKeyQueue(keys, invalidMap);
+      const nextKey = queue[0] || keys[0];
+      const invalidText = invalidCount ? `，失效 ${invalidCount} 个` : "";
+      const nextText = nextKey ? `，下一个：${maskKey(nextKey)}` : "";
+      keysSummary.textContent = `已保存 ${keys.length} 个 Key${invalidText}${nextText}`;
     }
 
     keyList.innerHTML = "";
     keys.forEach((key, index) => {
+      const invalidInfo = invalidMap[key.trim()];
       const pill = document.createElement("div");
       pill.className = "key-pill";
-      pill.textContent = `Key ${index + 1}: ${maskKey(key)}`;
+      if (invalidInfo) {
+        pill.classList.add("invalid");
+        const reason = invalidInfo.reason ? `（${invalidInfo.reason}）` : "（失效）";
+        pill.textContent = `Key ${index + 1}: ${maskKey(key)}${reason}`;
+      } else {
+        pill.textContent = `Key ${index + 1}: ${maskKey(key)}`;
+      }
       keyList.appendChild(pill);
     });
   };
@@ -153,19 +204,26 @@
       .filter((key) => key !== todayKey)
       .sort()
       .reverse();
+    const hasToday = Boolean(store[todayKey]);
+    const listKeys = keys.length ? keys : hasToday ? [todayKey] : [];
 
-    if (keys.length === 0) {
+    if (listKeys.length === 0) {
       usageHistorySummary.textContent = "暂无历史记录。";
       drawUsageChart(store);
       return;
     }
 
-    usageHistorySummary.textContent = `历史天数：${keys.length}`;
-    keys.forEach((key) => {
+    if (keys.length === 0 && hasToday) {
+      usageHistorySummary.textContent = "仅有今天记录。";
+    } else {
+      usageHistorySummary.textContent = `历史天数：${keys.length}`;
+    }
+    listKeys.forEach((key) => {
       const day = store[key] || { requests: 0 };
       const row = document.createElement("div");
       row.className = "usage-row";
-      row.textContent = `${key} · ${day.requests} 次`;
+      const suffix = key === todayKey ? "（今天）" : "";
+      row.textContent = `${key} · ${day.requests} 次${suffix}`;
       usageHistoryList.appendChild(row);
     });
 
@@ -333,6 +391,7 @@
       }
       saveKeys([]);
       localStorage.setItem(STORAGE.keyIndex, "0");
+      saveInvalidKeys({});
       renderKeys();
     });
   }
@@ -359,6 +418,10 @@
 
   document.querySelectorAll('[data-close="usage"]').forEach((btn) => {
     btn.addEventListener("click", () => closeModal(usageModal));
+  });
+
+  window.addEventListener("keys-status-changed", () => {
+    renderKeys();
   });
 
   if (clearHistoryBtn) {

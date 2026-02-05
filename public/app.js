@@ -16,7 +16,6 @@ const dropzoneEmpty = document.getElementById("dropzoneEmpty");
 const dropzonePreview = document.getElementById("dropzonePreview");
 const imagePreviewList = document.getElementById("imagePreviewList");
 const removeImageBtn = document.getElementById("removeImageBtn");
-const statusTag = document.getElementById("status");
 const answerBox = document.getElementById("answer");
 const errorBox = document.getElementById("error");
 const errorToggle = document.getElementById("errorToggle");
@@ -37,6 +36,7 @@ const STORAGE = {
   keys: "gemini_api_keys",
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
+  invalidKeys: "gemini_invalid_keys",
   history: "gemini_history",
 };
 
@@ -50,6 +50,40 @@ const loadKeys = () => {
   }
 };
 
+const loadInvalidKeys = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE.invalidKeys) || "{}");
+  } catch (error) {
+    return {};
+  }
+};
+
+const saveInvalidKeys = (map) => {
+  localStorage.setItem(STORAGE.invalidKeys, JSON.stringify(map));
+};
+
+const markInvalidKey = (key, reason) => {
+  const trimmed = (key || "").trim();
+  if (!trimmed) return;
+  const map = loadInvalidKeys();
+  map[trimmed] = {
+    reason: reason || "不可用",
+    time: new Date().toISOString(),
+  };
+  saveInvalidKeys(map);
+  window.dispatchEvent(new Event("keys-status-changed"));
+};
+
+const clearInvalidKey = (key) => {
+  const trimmed = (key || "").trim();
+  if (!trimmed) return;
+  const map = loadInvalidKeys();
+  if (!map[trimmed]) return;
+  delete map[trimmed];
+  saveInvalidKeys(map);
+  window.dispatchEvent(new Event("keys-status-changed"));
+};
+
 // 脱敏展示 Key：只保留前后几位
 const maskKey = (key) => {
   if (!key) return "****";
@@ -58,23 +92,33 @@ const maskKey = (key) => {
   return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
 };
 
-// 轮询选择 Key：每次请求使用下一个 Key
-const pickKey = (keys) => {
-  const currentIndex = Number.parseInt(
+const getKeyIndex = (length) => {
+  const rawIndex = Number.parseInt(
     localStorage.getItem(STORAGE.keyIndex) || "0",
     10
   );
-  const index = Number.isNaN(currentIndex) ? 0 : currentIndex;
-  const selected = keys[index % keys.length];
+  if (!Number.isFinite(length) || length <= 0) return 0;
+  const safeIndex = Number.isNaN(rawIndex) ? 0 : rawIndex;
+  return ((safeIndex % length) + length) % length;
+};
+
+const buildKeyQueue = (keys) => {
+  const invalidMap = loadInvalidKeys();
+  const startIndex = getKeyIndex(keys.length);
+  const rotated = keys.slice(startIndex).concat(keys.slice(0, startIndex));
+  const validKeys = rotated.filter((key) => !invalidMap[(key || "").trim()]);
+  return validKeys.length ? validKeys : rotated;
+};
+
+const setNextKeyIndex = (keys, usedKey) => {
+  if (!Array.isArray(keys) || keys.length === 0) return;
+  const index = keys.findIndex((item) => item === usedKey);
+  if (index < 0) return;
   localStorage.setItem(STORAGE.keyIndex, String((index + 1) % keys.length));
-  return selected;
 };
 
 // 更新状态标签文本，并标记是否在加载中
-const setStatus = (text, isLoading) => {
-  statusTag.textContent = text;
-  statusTag.classList.toggle("loading", Boolean(isLoading));
-};
+const setStatus = (_text, _isLoading) => {};
 
 // 控制加载动画与按钮禁用
 const setLoading = (isLoading) => {
@@ -597,44 +641,84 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  // 组装 multipart/form-data 发送给后端
-  const apiKey = pickKey(keys);
-  const formData = new FormData();
-  formData.append("apiKey", apiKey);
-  if (prompt) formData.append("prompt", prompt);
-  files.forEach((file) => {
-    formData.append("image", file);
-  });
-
   // UI 进入加载状态
   setLoading(true);
   answerBox.textContent = "正在解答，请稍候...";
   setStatus("处理中", true);
 
   try {
-    // 请求后端接口（由后端再转发给 Gemini）
-    const response = await fetch("/api/solve", {
-      method: "POST",
-      body: formData,
-    });
-    const data = await response.json();
+    const queue = buildKeyQueue(keys);
+    let lastError = "";
+    let solved = false;
 
-    // HTTP 非 2xx 时抛出错误，进入 catch
-    if (!response.ok) {
-      throw new Error(data.error || "请求失败。");
+    const isKeyError = (status, message) => {
+      const text = (message || "").toLowerCase();
+      if (status === 401 || status === 403) return true;
+      if (text.includes("api key") || text.includes("apikey")) return true;
+      if (text.includes("key") && (text.includes("invalid") || text.includes("expired"))) {
+        return true;
+      }
+      if (text.includes("permission") || text.includes("unauthorized")) return true;
+      return false;
+    };
+
+    const getInvalidReason = (status, message) => {
+      const text = (message || "").toLowerCase();
+      if (text.includes("expired")) return "已过期";
+      if (text.includes("not valid") || text.includes("invalid")) return "无效";
+      if (text.includes("permission") || text.includes("unauthorized")) return "无权限";
+      if (status === 401 || status === 403) return "无效";
+      return "不可用";
+    };
+
+    for (const apiKey of queue) {
+      const formData = new FormData();
+      formData.append("apiKey", apiKey);
+      if (prompt) formData.append("prompt", prompt);
+      files.forEach((file) => {
+        formData.append("image", file);
+      });
+
+      try {
+        const response = await fetch("/api/solve", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          const message = data.error || "请求失败。";
+          lastError = message;
+          if (isKeyError(response.status, message)) {
+            markInvalidKey(apiKey, getInvalidReason(response.status, message));
+          }
+          continue;
+        }
+
+        clearInvalidKey(apiKey);
+        setNextKeyIndex(keys, apiKey);
+
+        const answerText = data.answer || "暂无返回内容。";
+        answerBox.innerHTML = renderMarkdown(answerText);
+        renderMath(answerBox);
+        recordUsage(apiKey, data.usage);
+        addHistory({
+          prompt,
+          answer: data.answer,
+          imageName: files.length ? files.map((file) => file.name) : [],
+        });
+        setStatus("完成", false);
+        solved = true;
+        break;
+      } catch (error) {
+        lastError = error.message || "请求失败。";
+        continue;
+      }
     }
 
-    // 正常返回：渲染 Markdown + 公式，并记录历史/用量
-    const answerText = data.answer || "暂无返回内容。";
-    answerBox.innerHTML = renderMarkdown(answerText);
-    renderMath(answerBox);
-    recordUsage(apiKey, data.usage);
-    addHistory({
-      prompt,
-      answer: data.answer,
-      imageName: files.length ? files.map((file) => file.name) : [],
-    });
-    setStatus("完成", false);
+    if (!solved) {
+      throw new Error(lastError || "请求失败。");
+    }
   } catch (error) {
     answerBox.textContent = "暂无答案。";
     errorDetails.textContent = error.message;
