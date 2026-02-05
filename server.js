@@ -343,7 +343,7 @@ app.post(
         model: normalizedModel,
       });
     } catch (err) {
-    return res.status(500).json({ error: "Server error.", details: String(err) });
+    return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
     }
   }
 );
@@ -472,7 +472,7 @@ app.post(
       if (err?.name === "AbortError") {
         return res.end();
       }
-      return res.status(500).json({ error: "Server error.", details: String(err) });
+      return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
     }
   }
 );
