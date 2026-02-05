@@ -1,15 +1,11 @@
 ﻿(function () {
-  // 设置页脚本：管理 API Key、模型与使用次数
+  // 设置页脚本：管理 API Key 与使用次数
   const keysInput = document.getElementById("keysInput");
   const toggleKeysBtn = document.getElementById("toggleKeysBtn");
   const saveKeysBtn = document.getElementById("saveKeysBtn");
   const clearKeysBtn = document.getElementById("clearKeysBtn");
   const keysSummary = document.getElementById("keysSummary");
   const keyList = document.getElementById("keyList");
-
-  const modelInput = document.getElementById("modelInput");
-  const saveModelBtn = document.getElementById("saveModelBtn");
-  const modelHint = document.getElementById("modelHint");
 
   const usageTotalSummary = document.getElementById("usageTotalSummary");
   const openUsageBtn = document.getElementById("openUsageBtn");
@@ -18,6 +14,7 @@
   const usageTodayList = document.getElementById("usageTodayList");
   const usageHistorySummary = document.getElementById("usageHistorySummary");
   const usageHistoryList = document.getElementById("usageHistoryList");
+  const usageChart = document.getElementById("usageChart");
   const usageTabs = document.querySelectorAll("[data-usage-tab]");
   const usagePanels = document.querySelectorAll("[data-usage-panel]");
 
@@ -26,7 +23,6 @@
 
   const STORAGE = {
     keys: "gemini_api_keys",
-    model: "gemini_model",
     usage: "gemini_usage",
     keyIndex: "gemini_key_index",
     keysVisibility: "gemini_keys_visibility",
@@ -99,13 +95,6 @@
     });
   };
 
-  const renderModel = () => {
-    if (!modelInput || !modelHint) return;
-    const stored = localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
-    modelInput.value = stored;
-    modelHint.textContent = `当前：${stored}`;
-  };
-
   const getDayKey = (date) => date.toISOString().slice(0, 10);
 
   const loadUsageStore = () => {
@@ -167,6 +156,7 @@
 
     if (keys.length === 0) {
       usageHistorySummary.textContent = "暂无历史记录。";
+      drawUsageChart(store);
       return;
     }
 
@@ -177,6 +167,84 @@
       row.className = "usage-row";
       row.textContent = `${key} · ${day.requests} 次`;
       usageHistoryList.appendChild(row);
+    });
+
+    drawUsageChart(store);
+  };
+
+  const getChartColors = () => {
+    const styles = getComputedStyle(document.body);
+    return {
+      ink: styles.getPropertyValue("--ink").trim() || "#101113",
+      line: styles.getPropertyValue("--line").trim() || "rgba(16,17,19,0.12)",
+      accent: styles.getPropertyValue("--accent-2").trim() || "#d4d4d8",
+    };
+  };
+
+  const drawUsageChart = (store) => {
+    if (!usageChart || !usageChart.getContext) return;
+    const ctx = usageChart.getContext("2d");
+    if (!ctx) return;
+
+    const todayKey = getDayKey(new Date());
+    const keys = Object.keys(store)
+      .filter((key) => key !== todayKey)
+      .sort();
+
+    const fallbackKeys = store[todayKey] ? [todayKey] : [];
+    const chartKeys = keys.length ? keys : fallbackKeys;
+    const points = chartKeys.map((key) => ({
+      label: key,
+      value: store[key]?.requests || 0,
+    }));
+
+    const width = usageChart.width || 640;
+    const height = usageChart.height || 160;
+    ctx.clearRect(0, 0, width, height);
+
+    if (points.length === 0) {
+      usageChart.hidden = true;
+      return;
+    }
+
+    usageChart.hidden = false;
+    const colors = getChartColors();
+    const padding = 16;
+    const maxValue = Math.max(...points.map((p) => p.value), 1);
+    const minValue = 0;
+    const xStep = points.length > 1
+      ? (width - padding * 2) / (points.length - 1)
+      : 0;
+    const yScale = (height - padding * 2) / (maxValue - minValue || 1);
+
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, height - padding);
+    ctx.lineTo(width - padding, height - padding);
+    ctx.stroke();
+
+    ctx.strokeStyle = colors.ink;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = padding + index * xStep;
+      const y = height - padding - (point.value - minValue) * yScale;
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = colors.ink;
+    points.forEach((point, index) => {
+      const x = padding + index * xStep;
+      const y = height - padding - (point.value - minValue) * yScale;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
     });
   };
 
@@ -250,14 +318,6 @@
     });
   }
 
-  if (saveModelBtn) {
-    saveModelBtn.addEventListener("click", () => {
-      const model = modelInput.value.trim() || "gemini-3-flash-preview";
-      localStorage.setItem(STORAGE.model, model);
-      renderModel();
-    });
-  }
-
   if (openUsageBtn) {
     openUsageBtn.addEventListener("click", () => {
       openModal(usageModal);
@@ -288,7 +348,6 @@
       window.GeminiTheme.setThemePreference("system");
     }
     renderKeys();
-    renderModel();
     renderUsageAll();
     renderHistorySummary();
     applyKeysVisibility(getKeysVisibility());

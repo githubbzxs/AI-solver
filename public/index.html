@@ -164,14 +164,14 @@
       </div>
     </div>
 
-    <!-- 设置弹窗：API Key/模型/历史使用次数/历史记录 -->
+    <!-- 设置弹窗：API Key/历史使用次数/历史记录 -->
     <div class="modal" id="settingsModal" aria-hidden="true">
       <div class="modal-backdrop" data-close="settings"></div>
       <div class="modal-card">
         <div class="modal-head">
           <div>
             <h2>设置</h2>
-            <p class="modal-sub">管理 Key、模型与使用次数</p>
+            <p class="modal-sub">管理 Key 与使用次数</p>
           </div>
           <div class="modal-actions">
             <button type="button" class="ghost small" data-close="settings">关闭</button>
@@ -199,18 +199,6 @@
               </div>
               <div class="hint" id="keysSummary">暂无 Key。</div>
               <div id="keyList" class="key-list"></div>
-            </section>
-
-            <section class="panel">
-              <h2>模型</h2>
-              <label class="field">
-                <span>模型 ID</span>
-                <input id="modelInput" type="text" placeholder="gemini-3-flash-preview" />
-              </label>
-              <div class="panel-actions">
-                <button type="button" id="saveModelBtn">保存</button>
-              </div>
-              <div class="hint" id="modelHint">默认：gemini-3-flash-preview</div>
             </section>
 
             <section class="panel">
@@ -256,6 +244,7 @@
             <div class="usage-list" id="usageTodayList"></div>
           </div>
           <div class="tab-panel" data-usage-panel="history" hidden>
+            <canvas id="usageChart" class="usage-chart" width="640" height="160"></canvas>
             <div class="usage-summary" id="usageHistorySummary">暂无历史记录。</div>
             <div class="usage-list" id="usageHistoryList"></div>
           </div>

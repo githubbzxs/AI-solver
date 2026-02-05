@@ -22,7 +22,6 @@ const errorBox = document.getElementById("error");
 const errorToggle = document.getElementById("errorToggle");
 const errorDetails = document.getElementById("errorDetails");
 const submitBtn = document.getElementById("submitBtn");
-const modelBadge = document.getElementById("modelBadge");
 const spinner = document.getElementById("spinner");
 const copyBtn = document.getElementById("copyBtn");
 const pasteBtn = document.getElementById("pasteBtn");
@@ -37,7 +36,6 @@ const settingsModal = document.getElementById("settingsModal");
 // localStorage 的字段名集中管理
 const STORAGE = {
   keys: "gemini_api_keys",
-  model: "gemini_model",
   usage: "gemini_usage",
   keyIndex: "gemini_key_index",
   history: "gemini_history",
@@ -59,17 +57,6 @@ const maskKey = (key) => {
   const trimmed = key.trim();
   if (trimmed.length <= 8) return trimmed;
   return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
-};
-
-// 读取当前模型配置，默认使用 gemini-3-flash-preview
-const getModel = () => localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
-
-// 更新页面上的模型提示（如果存在）
-const updateSettingsSummary = () => {
-  const model = getModel();
-  if (modelBadge) {
-    modelBadge.textContent = `模型：${model}`;
-  }
 };
 
 // 轮询选择 Key：每次请求使用下一个 Key
@@ -302,7 +289,7 @@ const renderHistory = () => {
     summary.className = "history-summary";
 
     const summaryLeft = document.createElement("span");
-    summaryLeft.textContent = `${item.time} · ${item.model || "gemini-3-flash-preview"}`;
+    summaryLeft.textContent = item.time;
 
     const summaryRight = document.createElement("span");
     summaryRight.className = "history-open";
@@ -340,7 +327,7 @@ const renderHistory = () => {
 };
 
 // 新增一条历史记录，并限制总数量
-const addHistory = ({ prompt, answer, model, imageName }) => {
+const addHistory = ({ prompt, answer, imageName }) => {
   const items = loadHistory();
   // 使用本地时间字符串便于用户阅读
   const time = new Date().toLocaleString("zh-CN", { hour12: false });
@@ -349,7 +336,6 @@ const addHistory = ({ prompt, answer, model, imageName }) => {
     time,
     prompt,
     answer,
-    model,
     imageName,
   };
   // 最新的放在最前，最多保留 20 条
@@ -562,7 +548,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.GeminiTheme?.setThemePreference) {
     window.GeminiTheme.setThemePreference("system");
   }
-  updateSettingsSummary();
   renderHistory();
   updateDropzone();
 });
@@ -604,7 +589,6 @@ form.addEventListener("submit", async (event) => {
   errorToggle.textContent = "查看详情";
 
   const keys = loadKeys();
-  const model = getModel();
   const prompt = promptInput.value.trim();
   const files = selectedImages;
 
@@ -630,7 +614,6 @@ form.addEventListener("submit", async (event) => {
   const apiKey = pickKey(keys);
   const formData = new FormData();
   formData.append("apiKey", apiKey);
-  formData.append("model", model);
   if (prompt) formData.append("prompt", prompt);
   files.forEach((file) => {
     formData.append("image", file);
@@ -662,7 +645,6 @@ form.addEventListener("submit", async (event) => {
     addHistory({
       prompt,
       answer: data.answer,
-      model: data.model,
       imageName: files.length ? files.map((file) => file.name) : [],
     });
     setStatus("完成", false);

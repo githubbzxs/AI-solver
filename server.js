@@ -30,7 +30,7 @@ app.post("/api/solve", upload.array("image", MAX_IMAGES), async (req, res) => {
     // 从表单或环境变量读取 key/model/prompt 与上传文件
     const apiKey = (req.body.apiKey || process.env.GEMINI_API_KEY || "").trim();
     const apiVersion = "v1beta";
-    const model = (req.body.model || DEFAULT_MODEL).trim();
+    const model = DEFAULT_MODEL;
     const prompt = (req.body.prompt || "").trim();
     const files = req.files || [];
 
