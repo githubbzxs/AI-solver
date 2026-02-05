@@ -164,14 +164,14 @@
       </div>
     </div>
 
-    <!-- 设置弹窗：历史使用次数/历史记录 -->
+    <!-- 设置弹窗：API Key/模型/历史使用次数/历史记录 -->
     <div class="modal" id="settingsModal" aria-hidden="true">
       <div class="modal-backdrop" data-close="settings"></div>
       <div class="modal-card">
         <div class="modal-head">
           <div>
             <h2>设置</h2>
-            <p class="modal-sub">管理历史使用次数与历史记录</p>
+            <p class="modal-sub">管理 Key、模型与使用次数</p>
           </div>
           <div class="modal-actions">
             <button type="button" class="ghost small" data-close="settings">关闭</button>
@@ -179,6 +179,40 @@
         </div>
         <div class="modal-body">
           <div class="grid settings-grid">
+            <section class="panel">
+              <h2>API Key</h2>
+              <label class="field">
+                <div class="field-row">
+                  <span>每行一个 Key</span>
+                  <button type="button" id="toggleKeysBtn" class="ghost small">显示</button>
+                </div>
+                <textarea
+                  id="keysInput"
+                  class="key-input masked"
+                  rows="6"
+                  placeholder="AIza...&#10;AIza..."
+                ></textarea>
+              </label>
+              <div class="panel-actions">
+                <button type="button" id="saveKeysBtn">保存</button>
+                <button type="button" id="clearKeysBtn" class="ghost">清空</button>
+              </div>
+              <div class="hint" id="keysSummary">暂无 Key。</div>
+              <div id="keyList" class="key-list"></div>
+            </section>
+
+            <section class="panel">
+              <h2>模型</h2>
+              <label class="field">
+                <span>模型 ID</span>
+                <input id="modelInput" type="text" placeholder="gemini-3-flash-preview" />
+              </label>
+              <div class="panel-actions">
+                <button type="button" id="saveModelBtn">保存</button>
+              </div>
+              <div class="hint" id="modelHint">默认：gemini-3-flash-preview</div>
+            </section>
+
             <section class="panel">
               <h2>历史使用次数</h2>
               <div class="usage-summary" id="usageTotalSummary">暂无使用记录。</div>

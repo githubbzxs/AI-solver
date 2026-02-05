@@ -36,13 +36,55 @@ const settingsModal = document.getElementById("settingsModal");
 
 // localStorage 的字段名集中管理
 const STORAGE = {
+  keys: "gemini_api_keys",
+  model: "gemini_model",
   usage: "gemini_usage",
+  keyIndex: "gemini_key_index",
   history: "gemini_history",
 };
 
 // 从 localStorage 读取保存的 API Key 列表（JSON 字符串）
-const INTERNAL_KEY_LABEL = "内置Key";
+const loadKeys = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE.keys);
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    return [];
+  }
+};
 
+// 脱敏展示 Key：只保留前后几位
+const maskKey = (key) => {
+  if (!key) return "****";
+  const trimmed = key.trim();
+  if (trimmed.length <= 8) return trimmed;
+  return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+};
+
+// 读取当前模型配置，默认使用 gemini-3-flash-preview
+const getModel = () => localStorage.getItem(STORAGE.model) || "gemini-3-flash-preview";
+
+// 更新页面上的模型提示（如果存在）
+const updateSettingsSummary = () => {
+  const model = getModel();
+  if (modelBadge) {
+    modelBadge.textContent = `模型：${model}`;
+  }
+};
+
+// 轮询选择 Key：每次请求使用下一个 Key
+const pickKey = (keys) => {
+  const currentIndex = Number.parseInt(
+    localStorage.getItem(STORAGE.keyIndex) || "0",
+    10
+  );
+  const index = Number.isNaN(currentIndex) ? 0 : currentIndex;
+  const selected = keys[index % keys.length];
+  localStorage.setItem(STORAGE.keyIndex, String((index + 1) % keys.length));
+  return selected;
+};
+
+// 更新状态标签文本，并标记是否在加载中
 const setStatus = (text, isLoading) => {
   statusTag.textContent = text;
   statusTag.classList.toggle("loading", Boolean(isLoading));
@@ -317,7 +359,7 @@ const addHistory = ({ prompt, answer, model, imageName }) => {
 };
 
 // 记录用量：按天、按 Key 汇总，便于设置页展示
-const recordUsage = (usage) => {
+const recordUsage = (key, usage) => {
   const now = new Date();
   // 以日期（YYYY-MM-DD）作为存储 key，便于按天统计
   const dayKey = now.toISOString().slice(0, 10);
@@ -340,7 +382,7 @@ const recordUsage = (usage) => {
   today.tokens += totalTokens || 0;
 
   // 按 Key 再细分统计（Key 使用脱敏形式）
-  const label = INTERNAL_KEY_LABEL;
+  const label = maskKey(key);
   const perKey = today.perKey[label] || { requests: 0, tokens: 0 };
   perKey.requests += 1;
   perKey.tokens += totalTokens || 0;
@@ -515,11 +557,12 @@ document.addEventListener("keydown", (event) => {
   closeModal(settingsModal);
 });
 
-// 页面初始化：历史/上传区
+// 页面初始化：更新模型提示/历史/上传区
 document.addEventListener("DOMContentLoaded", () => {
   if (window.GeminiTheme?.setThemePreference) {
     window.GeminiTheme.setThemePreference("system");
   }
+  updateSettingsSummary();
   renderHistory();
   updateDropzone();
 });
@@ -559,6 +602,9 @@ form.addEventListener("submit", async (event) => {
   errorDetails.textContent = "";
   errorDetails.hidden = true;
   errorToggle.textContent = "查看详情";
+
+  const keys = loadKeys();
+  const model = getModel();
   const prompt = promptInput.value.trim();
   const files = selectedImages;
 
@@ -570,8 +616,21 @@ form.addEventListener("submit", async (event) => {
     errorBox.hidden = false;
     return;
   }
+
+  // 校验：必须先保存 API Key
+  if (keys.length === 0) {
+    errorDetails.textContent = "未保存 API Key，请先在设置页添加。";
+    errorDetails.hidden = true;
+    errorToggle.textContent = "查看详情";
+    errorBox.hidden = false;
+    return;
+  }
+
   // 组装 multipart/form-data 发送给后端
+  const apiKey = pickKey(keys);
   const formData = new FormData();
+  formData.append("apiKey", apiKey);
+  formData.append("model", model);
   if (prompt) formData.append("prompt", prompt);
   files.forEach((file) => {
     formData.append("image", file);
@@ -599,7 +658,7 @@ form.addEventListener("submit", async (event) => {
     const answerText = data.answer || "暂无返回内容。";
     answerBox.innerHTML = renderMarkdown(answerText);
     renderMath(answerBox);
-    recordUsage(data.usage);
+    recordUsage(apiKey, data.usage);
     addHistory({
       prompt,
       answer: data.answer,
