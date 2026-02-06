@@ -172,6 +172,66 @@ const renderMarkdown = (text) => {
   });
 };
 
+// 流式渲染答案：按帧更新 Markdown，按延时渲染公式，避免每个分片都全量重排
+const createLiveAnswerRenderer = (element) => {
+  let latestText = "";
+  let frameId = 0;
+  let mathTimer = 0;
+
+  const clearTimers = () => {
+    if (frameId) {
+      window.cancelAnimationFrame(frameId);
+      frameId = 0;
+    }
+    if (mathTimer) {
+      window.clearTimeout(mathTimer);
+      mathTimer = 0;
+    }
+  };
+
+  const scheduleMathRender = () => {
+    if (mathTimer) window.clearTimeout(mathTimer);
+    mathTimer = window.setTimeout(() => {
+      mathTimer = 0;
+      renderMath(element);
+    }, 120);
+  };
+
+  const renderMarkdownFrame = () => {
+    frameId = 0;
+    element.innerHTML = renderMarkdown(latestText);
+    scheduleMathRender();
+  };
+
+  const render = (text) => {
+    latestText = text || "";
+    if (frameId) return;
+    frameId = window.requestAnimationFrame(renderMarkdownFrame);
+  };
+
+  const flush = (text) => {
+    if (typeof text === "string") {
+      latestText = text;
+    }
+    clearTimers();
+    element.innerHTML = renderMarkdown(latestText);
+    renderMath(element);
+  };
+
+  const reset = () => {
+    latestText = "";
+    clearTimers();
+    element.textContent = "";
+  };
+
+  return {
+    render,
+    flush,
+    reset,
+    getText: () => latestText,
+  };
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -904,6 +964,8 @@ form.addEventListener("submit", async (event) => {
   setLoading(true);
   answerBox.textContent = "";
   setStatus("处理中", true);
+  const liveAnswerRenderer = createLiveAnswerRenderer(answerBox);
+  liveAnswerRenderer.reset();
 
   try {
     const queue = buildKeyQueue(keys);
@@ -945,10 +1007,10 @@ form.addEventListener("submit", async (event) => {
         let started = false;
         const result = await streamSolve(formData, (_delta, fullText) => {
           if (!started) {
-            answerBox.textContent = "";
+            liveAnswerRenderer.reset();
             started = true;
           }
-          answerBox.textContent = fullText;
+          liveAnswerRenderer.render(fullText);
         });
 
         if (!result.ok) {
@@ -969,8 +1031,10 @@ form.addEventListener("submit", async (event) => {
         setNextKeyIndex(keys, apiKey);
 
         const finalAnswer = result.answer || "暂无返回内容。";
-        answerBox.innerHTML = renderMarkdown(finalAnswer);
-        renderMath(answerBox);
+        if (finalAnswer !== liveAnswerRenderer.getText()) {
+          liveAnswerRenderer.render(finalAnswer);
+        }
+        liveAnswerRenderer.flush();
         recordUsage(apiKey, result.usage);
         if (getAuthUser()) {
           window.dispatchEvent(new Event("history-updated"));
