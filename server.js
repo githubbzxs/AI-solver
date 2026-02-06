@@ -34,6 +34,9 @@ const MAX_IMAGES = 6;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const DEFAULT_MODEL = "gemini-3-flash-preview";
 const API_VERSION = "v1beta";
+const GEMINI_BASE_URL = (
+  process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com"
+).replace(/\/+$/, "");
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOAD_ROOT = path.join(DATA_DIR, "uploads");
 if (!fs.existsSync(UPLOAD_ROOT)) {
@@ -313,10 +316,22 @@ const parseSsePayloads = (rawBlock) => {
     .filter((item) => item !== null);
 };
 
+const buildGeminiUrl = ({ normalizedModel, action, apiKey, alt }) => {
+  const endpointPath = `${API_VERSION}/models/${encodeURIComponent(normalizedModel)}:${action}`;
+  const url = new URL(endpointPath, `${GEMINI_BASE_URL}/`);
+  if (alt) {
+    url.searchParams.set("alt", alt);
+  }
+  url.searchParams.set("key", apiKey);
+  return url.toString();
+};
+
 const callGenerateContent = async ({ apiKey, normalizedModel, parts, signal }) => {
-  const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
-    normalizedModel
-  )}:generateContent?key=${apiKey}`;
+  const url = buildGeminiUrl({
+    normalizedModel,
+    action: "generateContent",
+    apiKey,
+  });
 
   const response = await fetch(url, {
     method: "POST",
@@ -511,6 +526,7 @@ app.post(
   upload.array("image", MAX_IMAGES),
   async (req, res) => {
     let controller = null;
+    let cleanupAbortListeners = () => {};
 
     try {
       const payload = buildSolvePayload(req);
@@ -519,14 +535,33 @@ app.post(
       }
 
       const { apiKey, parts, normalizedModel, prompt, files } = payload;
-      const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${encodeURIComponent(
-        normalizedModel
-      )}:streamGenerateContent?alt=sse&key=${apiKey}`;
+      const url = buildGeminiUrl({
+        normalizedModel,
+        action: "streamGenerateContent",
+        alt: "sse",
+        apiKey,
+      });
 
       controller = new AbortController();
-      req.on("close", () => {
-        if (controller) controller.abort();
-      });
+      const abortUpstream = () => {
+        if (controller && !controller.signal.aborted) {
+          controller.abort();
+        }
+      };
+      const onRequestAborted = () => {
+        abortUpstream();
+      };
+      const onResponseClosed = () => {
+        if (!res.writableEnded) {
+          abortUpstream();
+        }
+      };
+      req.on("aborted", onRequestAborted);
+      res.on("close", onResponseClosed);
+      cleanupAbortListeners = () => {
+        req.off("aborted", onRequestAborted);
+        res.off("close", onResponseClosed);
+      };
 
       const upstream = await fetch(url, {
         method: "POST",
@@ -663,6 +698,9 @@ app.post(
       }
       console.error("[/api/solve-stream] unexpected error:", err);
       return res.status(500).json({ error: "服务器错误，请稍后再试。", details: String(err) });
+    } finally {
+      cleanupAbortListeners();
+      controller = null;
     }
   }
 );
