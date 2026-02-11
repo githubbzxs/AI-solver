@@ -13,9 +13,9 @@ const bcrypt = require("bcryptjs");
 
 const {
   createUser,
-  getUserByEmail,
+  getUserByAccount,
   getUserById,
-  setUserRoleByEmail,
+  setUserRoleByAccount,
   updateUserById,
   listUsersForAdmin,
   getSessionByToken,
@@ -57,9 +57,10 @@ const SESSION_COOKIE = "ai_solver_session";
 const SESSION_TTL_DAYS = 30;
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 6;
-const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/i;
+const ACCOUNT_MIN_LENGTH = 3;
+const ACCOUNT_MAX_LENGTH = 64;
 const VALID_ROLES = new Set(["user", "admin"]);
-const ADMIN_EMAIL = ((process.env.ADMIN_EMAIL || "2782760414@qq.com") || "")
+const ADMIN_ACCOUNT = ((process.env.ADMIN_ACCOUNT || process.env.ADMIN_EMAIL || "admin") || "")
   .trim()
   .toLowerCase();
 const VOICEPRINT_SIMILARITY_THRESHOLD = (() => {
@@ -95,7 +96,26 @@ const parseCookies = (header) => {
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
-const normalizeEmail = (email) => (email || "").trim().toLowerCase();
+// 统一“账户”入参：优先 account，兼容旧请求的 email
+const normalizeAccount = (input) => {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const hasAccount = Object.prototype.hasOwnProperty.call(input, "account");
+    const rawValue = hasAccount ? input.account : input.email;
+    return String(rawValue || "").trim().toLowerCase();
+  }
+  return String(input || "").trim().toLowerCase();
+};
+
+const validateAccount = (account) => {
+  if (!account) return "账户不能为空。";
+  if (account.length < ACCOUNT_MIN_LENGTH || account.length > ACCOUNT_MAX_LENGTH) {
+    return `账户长度需在 ${ACCOUNT_MIN_LENGTH}-${ACCOUNT_MAX_LENGTH} 个字符之间。`;
+  }
+  if (/\s/.test(account)) {
+    return "账户不能包含空白字符。";
+  }
+  return null;
+};
 
 const parseIntegerId = (value) => {
   const id = Number.parseInt(value, 10);
@@ -160,6 +180,7 @@ const attachUser = (req, _res, next) => {
 
   req.user = {
     id: session.user_id,
+    account: normalizeAccount(session.email),
     email: session.email,
     role: session.role || "user",
   };
@@ -210,8 +231,10 @@ const EXT_BY_MIME = {
 
 const toPublicUser = (user) => {
   if (!user) return null;
+  const account = normalizeAccount(user.email);
   return {
     id: user.id,
+    account,
     email: user.email,
     role: user.role || "user",
     voiceprintEnabled: Boolean(user.voiceprint_enabled),
@@ -636,13 +659,13 @@ const callGenerateContent = async ({ apiKey, normalizedModel, parts, signal }) =
 };
 
 const ensureAdminRoleOnStartup = () => {
-  if (!ADMIN_EMAIL) return;
+  if (!ADMIN_ACCOUNT) return;
   try {
-    const adminUser = getUserByEmail(ADMIN_EMAIL);
+    const adminUser = getUserByAccount(ADMIN_ACCOUNT);
     if (!adminUser) return;
     if ((adminUser.role || "user") === "admin") return;
-    setUserRoleByEmail(ADMIN_EMAIL, "admin");
-    console.log(`[auth] 已将 ${ADMIN_EMAIL} 设置为管理员。`);
+    setUserRoleByAccount(ADMIN_ACCOUNT, "admin");
+    console.log(`[auth] 已将 ${ADMIN_ACCOUNT} 设置为管理员。`);
   } catch (error) {
     console.error("[auth] 管理员角色初始化失败：", error);
   }
@@ -656,20 +679,21 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const email = normalizeEmail(req.body?.email);
+    const account = normalizeAccount(req.body || {});
     const password = (req.body?.password || "").trim();
     const voiceprintInput = req.body?.voiceprint;
 
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ error: "邮箱格式不正确。" });
+    const accountError = validateAccount(account);
+    if (accountError) {
+      return res.status(400).json({ error: accountError });
     }
     if (password.length < PASSWORD_MIN_LENGTH) {
       return res
         .status(400)
         .json({ error: `密码至少 ${PASSWORD_MIN_LENGTH} 位。` });
     }
-    if (getUserByEmail(email)) {
-      return res.status(409).json({ error: "该邮箱已注册。" });
+    if (getUserByAccount(account)) {
+      return res.status(409).json({ error: "该账户已注册。" });
     }
 
     const voiceprint = normalizeVoiceprintVector(voiceprintInput, { required: false });
@@ -678,19 +702,19 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const role = email === ADMIN_EMAIL ? "admin" : "user";
+    const role = account === ADMIN_ACCOUNT ? "admin" : "user";
     let user = createUser(
-      email,
+      account,
       hash,
       role,
       voiceprint.provided ? JSON.stringify(voiceprint.vector) : null,
       voiceprint.provided
     );
 
-    // 兜底保证管理员邮箱始终是 admin
-    if (email === ADMIN_EMAIL && user.role !== "admin") {
-      setUserRoleByEmail(email, "admin");
-      user = getUserByEmail(email);
+    // 兜底保证管理员账户始终是 admin
+    if (account === ADMIN_ACCOUNT && user.role !== "admin") {
+      setUserRoleByAccount(account, "admin");
+      user = getUserByAccount(account);
     }
 
     issueSession(req, res, user.id);
@@ -702,17 +726,18 @@ app.post("/api/auth/register", async (req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const email = normalizeEmail(req.body?.email);
+    const account = normalizeAccount(req.body || {});
     const password = (req.body?.password || "").trim();
 
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ error: "邮箱格式不正确。" });
+    const accountError = validateAccount(account);
+    if (accountError) {
+      return res.status(400).json({ error: accountError });
     }
     if (!password) {
       return res.status(400).json({ error: "请输入密码。" });
     }
 
-    let user = getUserByEmail(email);
+    let user = getUserByAccount(account);
     if (!user) {
       return res.status(401).json({ error: "账号或密码错误。" });
     }
@@ -722,10 +747,10 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "账号或密码错误。" });
     }
 
-    // 若管理员邮箱用户因旧数据异常被降权，这里再兜底拉回 admin
-    if (email === ADMIN_EMAIL && (user.role || "user") !== "admin") {
-      setUserRoleByEmail(email, "admin");
-      user = getUserByEmail(email);
+    // 若管理员账户因旧数据异常被降权，这里再兜底拉回 admin
+    if (account === ADMIN_ACCOUNT && (user.role || "user") !== "admin") {
+      setUserRoleByAccount(account, "admin");
+      user = getUserByAccount(account);
     }
 
     const voiceprintCheck = verifyVoiceprintForLogin(user, req.body?.voiceprint);
@@ -839,6 +864,7 @@ app.get("/api/history/image/:imageId", requireAuth, (req, res) => {
 app.get("/api/admin/users", requireAuth, requireAdmin, (_req, res) => {
   const items = listUsersForAdmin().map((item) => ({
     id: item.id,
+    account: normalizeAccount(item.email),
     email: item.email,
     role: item.role || "user",
     createdAt: item.created_at,
@@ -860,6 +886,7 @@ app.get("/api/admin/users/:userId", requireAuth, requireAdmin, (req, res) => {
   return res.json({
     user: {
       id: targetUser.id,
+      account: normalizeAccount(targetUser.email),
       email: targetUser.email,
       role: targetUser.role || "user",
       createdAt: targetUser.created_at,
@@ -885,16 +912,23 @@ app.patch("/api/admin/users/:userId", requireAuth, requireAdmin, async (req, res
     const updates = {};
     const body = req.body || {};
 
-    if (Object.prototype.hasOwnProperty.call(body, "email")) {
-      const email = normalizeEmail(body.email);
-      if (!EMAIL_REGEX.test(email)) {
-        return res.status(400).json({ error: "邮箱格式不正确。" });
+    if (
+      Object.prototype.hasOwnProperty.call(body, "account") ||
+      Object.prototype.hasOwnProperty.call(body, "email")
+    ) {
+      const rawAccount = Object.prototype.hasOwnProperty.call(body, "account")
+        ? body.account
+        : body.email;
+      const account = normalizeAccount(rawAccount);
+      const accountError = validateAccount(account);
+      if (accountError) {
+        return res.status(400).json({ error: accountError });
       }
-      const existing = getUserByEmail(email);
+      const existing = getUserByAccount(account);
       if (existing && existing.id !== targetUser.id) {
-        return res.status(409).json({ error: "该邮箱已被占用。" });
+        return res.status(409).json({ error: "该账户已被占用。" });
       }
-      updates.email = email;
+      updates.email = account;
     }
 
     if (Object.prototype.hasOwnProperty.call(body, "password")) {
@@ -915,16 +949,16 @@ app.patch("/api/admin/users/:userId", requireAuth, requireAdmin, async (req, res
       if (targetUser.id === req.user.id && role !== "admin") {
         return res.status(400).json({ error: "不能将当前登录管理员降权。" });
       }
-      const finalEmail = normalizeEmail(updates.email || targetUser.email);
-      if (finalEmail === ADMIN_EMAIL && role !== "admin") {
-        return res.status(400).json({ error: "系统管理员邮箱不能被降为普通用户。" });
+      const finalAccount = normalizeAccount(updates.email || targetUser.email);
+      if (finalAccount === ADMIN_ACCOUNT && role !== "admin") {
+        return res.status(400).json({ error: "系统管理员账户不能被降为普通用户。" });
       }
       updates.role = role;
     }
 
-    // 管理员邮箱必须为 admin
-    const resultingEmail = normalizeEmail(updates.email || targetUser.email);
-    if (resultingEmail === ADMIN_EMAIL) {
+    // 管理员账户必须为 admin
+    const resultingAccount = normalizeAccount(updates.email || targetUser.email);
+    if (resultingAccount === ADMIN_ACCOUNT) {
       updates.role = "admin";
     }
 
@@ -937,7 +971,7 @@ app.patch("/api/admin/users/:userId", requireAuth, requireAdmin, async (req, res
       updatedUser = updateUserById(targetUser.id, updates);
     } catch (error) {
       if (String(error).includes("UNIQUE constraint failed: users.email")) {
-        return res.status(409).json({ error: "该邮箱已被占用。" });
+        return res.status(409).json({ error: "该账户已被占用。" });
       }
       throw error;
     }
@@ -945,6 +979,7 @@ app.patch("/api/admin/users/:userId", requireAuth, requireAdmin, async (req, res
     return res.json({
       user: {
         id: updatedUser.id,
+        account: normalizeAccount(updatedUser.email),
         email: updatedUser.email,
         role: updatedUser.role || "user",
         createdAt: updatedUser.created_at,
@@ -972,6 +1007,7 @@ app.get("/api/admin/users/:userId/history", requireAuth, requireAdmin, (req, res
   return res.json({
     user: {
       id: targetUser.id,
+      account: normalizeAccount(targetUser.email),
       email: targetUser.email,
       role: targetUser.role || "user",
     },
@@ -1010,6 +1046,7 @@ app.delete("/api/admin/users/:userId/voiceprint", requireAuth, requireAdmin, (re
     ok: true,
     user: {
       id: updatedUser.id,
+      account: normalizeAccount(updatedUser.email),
       email: updatedUser.email,
       role: updatedUser.role || "user",
       voiceprintEnabled: Boolean(updatedUser.voiceprint_enabled),

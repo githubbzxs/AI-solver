@@ -153,6 +153,9 @@ const getUserByEmail = (email) =>
     )
     .get(email);
 
+// 账户语义别名：底层仍使用 users.email 列，避免破坏历史数据
+const getUserByAccount = (account) => getUserByEmail(account);
+
 const getUserById = (id) =>
   db
     .prepare(
@@ -193,6 +196,9 @@ const updateUserById = (userId, updates = {}) => {
 
 const setUserRoleByEmail = (email, role) =>
   db.prepare("UPDATE users SET role = ? WHERE email = ?").run(normalizeRole(role), email);
+
+// 账户语义别名：底层仍使用 users.email 列
+const setUserRoleByAccount = (account, role) => setUserRoleByEmail(account, role);
 
 const setUserVoiceprint = (userId, voiceprintVector) => {
   const normalized = normalizeVoiceprintPayload(voiceprintVector);
@@ -436,9 +442,11 @@ const clearVoiceprintForUser = (userId) => clearUserVoiceprint(userId);
 module.exports = {
   createUser,
   getUserByEmail,
+  getUserByAccount,
   getUserById,
   updateUserById,
   setUserRoleByEmail,
+  setUserRoleByAccount,
   setUserVoiceprint,
   clearUserVoiceprint,
   setVoiceprintForUser,
