@@ -49,6 +49,7 @@ const GEMINI_BASE_URL = (
 ).replace(/\/+$/, "");
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOAD_ROOT = path.join(DATA_DIR, "uploads");
+const PUBLIC_DIR = path.join(__dirname, "public");
 if (!fs.existsSync(UPLOAD_ROOT)) {
   fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
 }
@@ -682,7 +683,29 @@ ensureAdminRoleOnStartup();
 
 app.use(express.json({ limit: "1mb" }));
 app.use(attachUser);
-app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/login.html", (req, res, next) => {
+  if (req.user) {
+    return res.redirect("/");
+  }
+  return next();
+});
+
+app.get("/", (req, res) => {
+  if (!req.user) {
+    return res.redirect("/login.html");
+  }
+  return res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+app.get(["/index.html", "/settings.html"], (req, res, next) => {
+  if (!req.user) {
+    return res.redirect("/login.html");
+  }
+  return next();
+});
+
+app.use(express.static(PUBLIC_DIR));
 
 app.post("/api/auth/register", async (req, res) => {
   try {

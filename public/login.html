@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 · AI-solver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260211" />
+  </head>
+  <body data-page="login">
+    <div class="page auth-page">
+      <div class="top-bar simple">
+        <span class="brand">AI-solver</span>
+      </div>
+
+      <header class="hero compact">
+        <div class="hero-text">
+          <p class="kicker">Welcome</p>
+          <h1>登录后开始解题</h1>
+          <p class="lead">登录后可使用解题、历史记录与个性化设置。</p>
+        </div>
+      </header>
+
+      <main class="grid auth-grid">
+        <section class="panel auth-panel">
+          <h2>账号</h2>
+          <div class="hint" id="authStatus">未登录</div>
+          <label class="field">
+            <span>账户</span>
+            <input
+              id="authEmail"
+              type="text"
+              autocomplete="username"
+              placeholder="请输入账户名"
+            />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input
+              id="authPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="至少6位"
+            />
+          </label>
+          <div class="voiceprint-card">
+            <div class="field-row">
+              <span>声纹</span>
+              <span id="voiceprintBadge" class="pill subtle">未录制</span>
+            </div>
+            <div class="hint" id="voiceprintStatus">可选录制声纹，登录/注册时将一并提交。</div>
+            <div class="panel-actions auth-actions">
+              <button type="button" id="recordVoiceprintBtn" class="ghost">录制声纹</button>
+              <button type="button" id="saveVoiceprintBtn" hidden>保存/更新声纹</button>
+            </div>
+            <div class="panel-actions">
+              <button type="button" id="clearVoiceprintBtn" class="ghost" hidden>清除声纹</button>
+            </div>
+          </div>
+          <div class="panel-actions auth-actions">
+            <button type="button" id="loginBtn">登录</button>
+            <button type="button" id="registerBtn" class="ghost">注册</button>
+          </div>
+          <div class="panel-actions">
+            <button type="button" id="logoutBtn" class="ghost" hidden>退出登录</button>
+          </div>
+          <div class="hint auth-message" id="authMessage"></div>
+          <div class="hint">登录成功后会自动进入主页。</div>
+        </section>
+      </main>
+    </div>
+
+    <script src="theme.js?v=20260206"></script>
+    <script src="settings.js?v=20260211"></script>
+  </body>
+</html>

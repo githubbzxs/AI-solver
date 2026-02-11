@@ -161,6 +161,20 @@ body.modal-open {
   padding: 48px 24px calc(72px + env(safe-area-inset-bottom));
 }
 
+/* 独立登录页容器：收窄宽度并居中 */
+.auth-page {
+  max-width: 560px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* 登录页仅保留单列布局 */
+.auth-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Hero 区域：介绍文本 + 信息卡片 */
 .hero {
   display: grid;

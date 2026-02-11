@@ -28,11 +28,7 @@ const historyList = document.getElementById("historyList");
 const historyToggle = document.getElementById("historyToggle");
 const settingsToggle = document.getElementById("settingsToggle");
 const historyModal = document.getElementById("historyModal");
-const loginModal = document.getElementById("loginModal");
 const settingsModal = document.getElementById("settingsModal");
-const authEmail = document.getElementById("authEmail");
-const authPassword = document.getElementById("authPassword");
-const authMessage = document.getElementById("authMessage");
 
 // localStorage 的字段名集中管理
 const STORAGE = {
@@ -266,14 +262,11 @@ const refreshAuthUser = async () => {
   }
 };
 
-const setAuthHint = (text, tone = "error") => {
-  if (!authMessage) return;
-  authMessage.textContent = text || "";
-  if (tone) {
-    authMessage.dataset.tone = tone;
-  } else {
-    authMessage.removeAttribute("data-tone");
-  }
+const redirectToLogin = (message = "") => {
+  const query = message
+    ? `?message=${encodeURIComponent(String(message).trim())}`
+    : "";
+  window.location.replace(`/login.html${query}`);
 };
 
 const parseSseEvent = (block) => {
@@ -784,27 +777,9 @@ const closeModal = (modal) => {
   document.body.classList.remove("modal-open");
 };
 
-const openLoginModal = (message) => {
-  closeModal(historyModal);
-  closeModal(settingsModal);
-  openModal(loginModal);
-  if (message) {
-    setAuthHint(message, "error");
-  } else {
-    setAuthHint("");
-  }
-  if (authEmail) {
-    authEmail.focus();
-    authEmail.select();
-  } else if (authPassword) {
-    authPassword.focus();
-  }
-};
-
 const ensureLoggedIn = (message) => {
   if (getAuthUser()) return true;
-  openLoginModal(message || "请先登录后使用。");
-  showNotice("请先登录后使用。", "error");
+  redirectToLogin(message || "请先登录后使用。");
   return false;
 };
 
@@ -830,20 +805,9 @@ document.querySelectorAll("[data-open=\"settings\"]").forEach((btn) => {
   });
 });
 
-document.querySelectorAll("[data-open=\"login\"]").forEach((btn) => {
-  btn.addEventListener("click", (event) => {
-    event.preventDefault();
-    openLoginModal();
-  });
-});
-
 // 点击遮罩或关闭按钮关闭弹窗
 document.querySelectorAll("[data-close=\"history\"]").forEach((btn) => {
   btn.addEventListener("click", () => closeModal(historyModal));
-});
-
-document.querySelectorAll("[data-close=\"login\"]").forEach((btn) => {
-  btn.addEventListener("click", () => closeModal(loginModal));
 });
 
 document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
@@ -854,7 +818,6 @@ document.querySelectorAll("[data-close=\"settings\"]").forEach((btn) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeModal(historyModal);
-  closeModal(loginModal);
   closeModal(settingsModal);
 });
 
@@ -868,7 +831,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const refresh = window.AISolverAuth?.refresh?.();
   Promise.resolve(refresh).finally(() => {
     if (!getAuthUser()) {
-      openLoginModal("请先登录后使用。");
+      redirectToLogin("请先登录后使用。");
     }
   });
 });
@@ -878,18 +841,15 @@ window.addEventListener("auth-changed", (event) => {
     renderHistory();
   }
   if (event?.detail) {
-    if (loginModal && loginModal.classList.contains("is-open")) {
-      closeModal(loginModal);
-    }
+    return;
   } else {
-    openLoginModal("请先登录后使用。");
+    redirectToLogin("请先登录后使用。");
   }
 });
 
 window.addEventListener("auth-required", (event) => {
   const message = event?.detail?.message || "请先登录后使用。";
-  openLoginModal(message);
-  showNotice(message, "error");
+  redirectToLogin(message);
 });
 
 window.addEventListener("history-updated", () => {
@@ -1015,7 +975,7 @@ form.addEventListener("submit", async (event) => {
           lastError = message;
           if (result.status === 401) {
             await refreshAuthUser();
-            openLoginModal(message || "请先登录后使用。");
+            redirectToLogin(message || "请先登录后使用。");
             throw new Error(message);
           }
           if (apiKey && isKeyError(result.status, message)) {

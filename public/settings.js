@@ -65,6 +65,12 @@
         Boolean(window.AudioContext || window.webkitAudioContext),
     },
   };
+  const PAGE_MODE = String(document.body?.dataset?.page || "").trim().toLowerCase();
+  const IS_LOGIN_PAGE = PAGE_MODE === "login";
+  const redirectToHome = () => {
+    if (typeof window === "undefined") return;
+    window.location.replace("/");
+  };
 
   const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
   const isAdmin = () => state.user?.role === "admin";
@@ -370,6 +376,10 @@
     if (isAdmin()) {
       refreshUnified();
       refreshAdminUsers();
+    }
+    if (IS_LOGIN_PAGE && state.user) {
+      redirectToHome();
+      return;
     }
     window.dispatchEvent(new CustomEvent("auth-changed", { detail: state.user }));
   };
@@ -745,6 +755,12 @@
     renderUsage();
     renderVoice();
     renderAdmin();
+    if (IS_LOGIN_PAGE) {
+      const message = new URLSearchParams(window.location.search).get("message");
+      if (message) {
+        setAuthMessage(message, "error");
+      }
+    }
     refreshAuth().then(refreshVoiceStatus).catch(() => setUser(null));
   });
 
