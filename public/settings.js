@@ -14,6 +14,7 @@
     voiceBadge: q("voiceprintBadge"),
     voiceStatus: q("voiceprintStatus"),
     voiceRecordBtn: q("recordVoiceprintBtn"),
+    voiceLoginBtn: q("voiceLoginBtn"),
     voiceSaveBtn: q("saveVoiceprintBtn"),
     voiceClearBtn: q("clearVoiceprintBtn"),
     keysInput: q("keysInput"),
@@ -309,6 +310,15 @@
       capturedAt: state.voice.local.capturedAt,
     };
   };
+  const getVoiceLoginErrorText = (response) => {
+    const code = response?.data?.code;
+    if (code === "VOICEPRINT_REQUIRED") return "请先录制有效声纹后再尝试。";
+    if (code === "VOICEPRINT_MISMATCH") return "声纹验证失败，请重试或改用账号密码登录。";
+    if (code === "VOICEPRINT_AMBIGUOUS") return "声纹匹配到多个账户，请改用账号密码登录。";
+    if (code === "VOICEPRINT_UNAVAILABLE") return "当前没有可用声纹账户，请先用账号密码登录。";
+    if (code === "VOICEPRINT_UNKNOWN") return "未找到匹配账户，请改用账号密码登录。";
+    return response?.message || "声纹登录失败，请稍后重试。";
+  };
 
   const renderVoice = () => {
     const loggedIn = Boolean(state.user);
@@ -325,6 +335,12 @@
       e.voiceSaveBtn.hidden = !loggedIn || !state.voice.apiOk;
       e.voiceSaveBtn.disabled = state.voice.recording || !hasLocalVoice;
     }
+    if (e.voiceLoginBtn) {
+      const showVoiceLogin = IS_LOGIN_PAGE && !loggedIn;
+      e.voiceLoginBtn.hidden = !showVoiceLogin;
+      e.voiceLoginBtn.disabled =
+        state.voice.recording || !state.voice.supported || !hasLocalVoice;
+    }
     if (e.voiceClearBtn) {
       e.voiceClearBtn.hidden = !loggedIn || !state.voice.apiOk;
       e.voiceClearBtn.disabled = state.voice.recording;
@@ -338,6 +354,33 @@
             ? "已保存"
             : "未录制";
     }
+  };
+
+  const attemptVoiceLogin = async () => {
+    if (!IS_LOGIN_PAGE) return;
+    if (!state.voice.supported) {
+      setAuthMessage("当前浏览器不支持声纹登录，请改用账号密码登录。", "error");
+      return;
+    }
+    const voice = getVoicePayload();
+    if (!voice) {
+      setAuthMessage("请先录制有效声纹。", "error");
+      return;
+    }
+    setAuthMessage("正在进行声纹登录...");
+    const r = await fetchJson("/api/auth/login/voiceprint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voiceprint: voice }),
+    });
+    if (!r.ok) {
+      setAuthMessage(getVoiceLoginErrorText(r), "error");
+      return;
+    }
+    if (e.authPassword) e.authPassword.value = "";
+    setAuthMessage("声纹登录成功。", "success");
+    setUser(r.data?.user || null);
+    refreshVoiceStatus();
   };
 
   const renderAdmin = () => {
@@ -582,6 +625,7 @@
   });
 
   if (e.voiceRecordBtn) e.voiceRecordBtn.addEventListener("click", recordVoice);
+  if (e.voiceLoginBtn) e.voiceLoginBtn.addEventListener("click", attemptVoiceLogin);
   if (e.voiceSaveBtn) e.voiceSaveBtn.addEventListener("click", async () => {
     if (!state.user) return;
     if (!state.voice.apiOk) return tone(e.voiceStatus, "当前后端未开启声纹保存接口。", "warn");

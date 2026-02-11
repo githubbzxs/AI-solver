@@ -31,6 +31,7 @@ const {
   setVoiceprintForUser,
   clearVoiceprintForUser,
   getVoiceprintByUserId,
+  listVoiceprintUsers,
   getUnifiedApiSetting,
   upsertUnifiedApiSetting,
 } = require("./db");
@@ -80,6 +81,11 @@ const VOICEPRINT_MAX_DIMENSIONS = (() => {
 const VOICEPRINT_MIN_NORM = (() => {
   const raw = Number.parseFloat(process.env.VOICEPRINT_MIN_NORM || "1e-6");
   return Number.isFinite(raw) && raw > 0 ? raw : 1e-6;
+})();
+const VOICEPRINT_AMBIGUITY_GAP = (() => {
+  const raw = Number.parseFloat(process.env.VOICEPRINT_AMBIGUITY_GAP || "0.03");
+  if (Number.isFinite(raw) && raw > 0 && raw < 1) return raw;
+  return 0.03;
 })();
 
 // multer 解析 multipart/form-data，内存存储便于直接转 base64
@@ -170,27 +176,35 @@ const buildLogoutCookie = (secure) => {
 };
 
 const attachUser = (req, _res, next) => {
-  const cookies = parseCookies(req.headers.cookie || "");
-  const token = cookies[SESSION_COOKIE];
-  if (!token) return next();
+  try {
+    const cookies = parseCookies(req.headers.cookie || "");
+    const token = cookies[SESSION_COOKIE];
+    if (!token) return next();
 
-  const tokenHash = hashToken(token);
-  const session = getSessionByToken(tokenHash);
-  if (!session) return next();
+    const tokenHash = hashToken(token);
+    const session = getSessionByToken(tokenHash);
+    if (!session) return next();
 
-  if (session.expires_at && new Date(session.expires_at) < new Date()) {
-    deleteSessionByToken(tokenHash);
+    if (session.expires_at && new Date(session.expires_at) < new Date()) {
+      deleteSessionByToken(tokenHash);
+      return next();
+    }
+
+    req.user = {
+      id: session.user_id,
+      account: normalizeAccount(session.email),
+      email: session.email,
+      role: session.role || "user",
+    };
+    req.sessionToken = token;
+    return next();
+  } catch (error) {
+    // 会话读取失败时不阻断静态资源与匿名接口，避免页面整体不可访问
+    console.error("[auth] attachUser failed:", error);
+    req.user = null;
+    req.sessionToken = null;
     return next();
   }
-
-  req.user = {
-    id: session.user_id,
-    account: normalizeAccount(session.email),
-    email: session.email,
-    role: session.role || "user",
-  };
-  req.sessionToken = token;
-  return next();
 };
 
 const requireAuth = (req, res, next) => {
@@ -808,6 +822,87 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/auth/login/voiceprint", (req, res) => {
+  try {
+    const incoming = normalizeVoiceprintVector(req.body?.voiceprint, { required: true });
+    if (incoming.error) {
+      return res.status(400).json({ error: incoming.error, code: "VOICEPRINT_REQUIRED" });
+    }
+
+    const candidates = listVoiceprintUsers();
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(404).json({
+        error: "当前没有可用的声纹账户，请先使用账号密码登录。",
+        code: "VOICEPRINT_UNAVAILABLE",
+      });
+    }
+
+    let best = null;
+    let second = null;
+    candidates.forEach((candidate) => {
+      const stored = parseStoredVoiceprint(candidate.voiceprint_vector);
+      if (!stored) return;
+      const similarity = cosineSimilarity(incoming.vector, stored);
+      if (similarity === null) return;
+      const item = {
+        userId: candidate.id,
+        score: similarity,
+      };
+      if (!best || item.score > best.score) {
+        second = best;
+        best = item;
+      } else if (!second || item.score > second.score) {
+        second = item;
+      }
+    });
+
+    if (!best || best.score < VOICEPRINT_SIMILARITY_THRESHOLD) {
+      return res.status(401).json({
+        error: "声纹验证失败。",
+        code: "VOICEPRINT_MISMATCH",
+        similarity: best ? Number(best.score.toFixed(4)) : null,
+        threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+      });
+    }
+
+    if (
+      second &&
+      second.score >= VOICEPRINT_SIMILARITY_THRESHOLD &&
+      best.score - second.score < VOICEPRINT_AMBIGUITY_GAP
+    ) {
+      return res.status(409).json({
+        error: "声纹匹配到多个近似账户，请改用账号密码登录。",
+        code: "VOICEPRINT_AMBIGUOUS",
+        similarity: Number(best.score.toFixed(4)),
+        threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+        ambiguityGap: VOICEPRINT_AMBIGUITY_GAP,
+      });
+    }
+
+    const matchedUser = getUserById(best.userId);
+    if (!matchedUser) {
+      return res.status(401).json({
+        error: "声纹匹配到的账户不存在，请改用账号密码登录。",
+        code: "VOICEPRINT_UNKNOWN",
+      });
+    }
+
+    issueSession(req, res, matchedUser.id);
+    return res.json({
+      user: toPublicUser(matchedUser),
+      method: "voiceprint",
+      voiceprint: {
+        required: true,
+        verified: true,
+        similarity: Number(best.score.toFixed(4)),
+        threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "声纹登录失败。", details: String(err) });
+  }
+});
+
 app.post("/api/auth/logout", (req, res) => {
   clearSession(req, res, req.sessionToken);
   return res.json({ ok: true });
@@ -1351,6 +1446,7 @@ app.get("/health", (_req, res) => {
 
 // 启动服务
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () => {
+  console.log(`Server running at http://${host}:${port}`);
 });

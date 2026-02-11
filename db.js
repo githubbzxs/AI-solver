@@ -434,6 +434,15 @@ const getVoiceprintByUserId = (userId) =>
     )
     .get(userId);
 
+const listVoiceprintUsers = () =>
+  db
+    .prepare(
+      `SELECT id, email, role, voiceprint_vector, voiceprint_enabled
+       FROM users
+       WHERE voiceprint_enabled = 1 AND voiceprint_vector IS NOT NULL`
+    )
+    .all();
+
 const setVoiceprintForUser = (userId, voiceprintVector) =>
   setUserVoiceprint(userId, voiceprintVector);
 
@@ -452,6 +461,7 @@ module.exports = {
   setVoiceprintForUser,
   clearVoiceprintForUser,
   getVoiceprintByUserId,
+  listVoiceprintUsers,
   listUsersWithStats,
   listUsersForAdmin,
   createSession,
