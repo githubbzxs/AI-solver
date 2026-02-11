@@ -1058,11 +1058,199 @@ body[data-theme="dark"] .usage-chart {
   margin-bottom: 12px;
 }
 
+.voiceprint-card {
+  margin: 14px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.admin-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.admin-head-row h3,
+.admin-block h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-users-list {
+  display: grid;
+  gap: 12px;
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.admin-user-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.admin-user-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.admin-user-actions button {
+  flex: 1;
+}
+
+.admin-user-actions {
+  flex-wrap: wrap;
+}
+
+.admin-user-history {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .auth-message[data-tone="error"] {
   color: #8b1d1d;
 }
 
+.voiceprint-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.voiceprint-card .panel-actions {
+  margin-bottom: 8px;
+}
+
+#voiceprintStatus[data-tone="success"],
+#adminConsoleStatus[data-tone="success"],
+#unifiedApiStatus[data-tone="success"],
+#adminUsersStatus[data-tone="success"],
+.admin-user-status[data-tone="success"] {
+  color: #1d6b3c;
+}
+
+#voiceprintStatus[data-tone="warn"],
+#adminConsoleStatus[data-tone="warn"],
+#unifiedApiStatus[data-tone="warn"],
+#adminUsersStatus[data-tone="warn"],
+.admin-user-status[data-tone="warn"] {
+  color: #9a6a15;
+}
+
+#voiceprintStatus[data-tone="error"],
+#adminConsoleStatus[data-tone="error"],
+#unifiedApiStatus[data-tone="error"],
+#adminUsersStatus[data-tone="error"],
+.admin-user-status[data-tone="error"] {
+  color: #8b1d1d;
+}
+
+.admin-panel {
+  grid-column: 1 / -1;
+}
+
+.admin-block {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.admin-block h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.admin-head-row h3 {
+  margin: 0;
+}
+
+.admin-users-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-user-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 10px 12px;
+}
+
+.admin-user-summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.admin-user-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-user-role {
+  display: inline-flex;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.admin-user-body {
+  margin-top: 12px;
+}
+
 body[data-theme="dark"] .auth-message[data-tone="error"] {
+  color: #f0caca;
+}
+
+body[data-theme="dark"] .voiceprint-card,
+body[data-theme="dark"] .admin-user-card,
+body[data-theme="dark"] .admin-user-history {
+  background: rgba(0, 0, 0, 0.36);
+}
+
+body[data-theme="dark"] #voiceprintStatus[data-tone="success"],
+body[data-theme="dark"] #adminConsoleStatus[data-tone="success"],
+body[data-theme="dark"] #unifiedApiStatus[data-tone="success"],
+body[data-theme="dark"] #adminUsersStatus[data-tone="success"],
+body[data-theme="dark"] .admin-user-status[data-tone="success"] {
+  color: #9ae5b7;
+}
+
+body[data-theme="dark"] #voiceprintStatus[data-tone="warn"],
+body[data-theme="dark"] #adminConsoleStatus[data-tone="warn"],
+body[data-theme="dark"] #unifiedApiStatus[data-tone="warn"],
+body[data-theme="dark"] #adminUsersStatus[data-tone="warn"],
+body[data-theme="dark"] .admin-user-status[data-tone="warn"] {
+  color: #f3d18c;
+}
+
+body[data-theme="dark"] #voiceprintStatus[data-tone="error"],
+body[data-theme="dark"] #adminConsoleStatus[data-tone="error"],
+body[data-theme="dark"] #unifiedApiStatus[data-tone="error"],
+body[data-theme="dark"] #adminUsersStatus[data-tone="error"],
+body[data-theme="dark"] .admin-user-status[data-tone="error"] {
   color: #f0caca;
 }
 
@@ -1283,5 +1471,16 @@ body[data-theme="dark"] .error-details {
 
   .panel-actions {
     flex-direction: column;
+  }
+
+  .voiceprint-card,
+  .admin-block,
+  .admin-user-card {
+    padding: 12px;
+  }
+
+  .admin-user-summary {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

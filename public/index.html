@@ -208,6 +208,26 @@
                 placeholder="至少6位"
               />
             </label>
+            <div class="voiceprint-card">
+              <div class="field-row">
+                <span>声纹</span>
+                <span id="voiceprintBadge" class="pill subtle">未录制</span>
+              </div>
+              <div class="hint" id="voiceprintStatus">
+                可选录制声纹，登录/注册时将一并提交。
+              </div>
+              <div class="panel-actions auth-actions">
+                <button type="button" id="recordVoiceprintBtn" class="ghost">
+                  录制声纹
+                </button>
+                <button type="button" id="saveVoiceprintBtn" hidden>保存/更新声纹</button>
+              </div>
+              <div class="panel-actions">
+                <button type="button" id="clearVoiceprintBtn" class="ghost" hidden>
+                  清除声纹
+                </button>
+              </div>
+            </div>
             <div class="panel-actions auth-actions">
               <button type="button" id="loginBtn">登录</button>
               <button type="button" id="registerBtn" class="ghost">注册</button>
@@ -272,6 +292,42 @@
               <div class="hint" id="historySummary">暂无历史记录。</div>
               <div class="panel-actions">
                 <button type="button" id="clearHistoryBtn" class="ghost">清空历史</button>
+              </div>
+            </section>
+
+            <section class="panel admin-panel" id="adminConsole" hidden>
+              <h2>管理员控制台</h2>
+              <div class="hint" id="adminConsoleStatus">仅管理员可见。</div>
+
+              <div class="admin-block">
+                <h3>统一 API Key</h3>
+                <div class="hint" id="unifiedApiStatus">正在读取统一 Key 状态...</div>
+                <label class="field">
+                  <span>设置统一 API Key</span>
+                  <input
+                    id="unifiedApiKeyInput"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="输入新的统一 API Key"
+                  />
+                </label>
+                <div class="panel-actions">
+                  <button type="button" id="saveUnifiedApiBtn">保存统一 Key</button>
+                  <button type="button" id="clearUnifiedApiBtn" class="ghost">
+                    清除统一 Key
+                  </button>
+                </div>
+              </div>
+
+              <div class="admin-block">
+                <div class="field-row admin-head-row">
+                  <h3>用户管理</h3>
+                  <button type="button" id="refreshAdminUsersBtn" class="ghost small">刷新</button>
+                </div>
+                <div class="hint" id="adminUsersStatus">正在读取用户列表...</div>
+                <div id="adminUsersList" class="admin-users-list">
+                  <div class="history-empty">暂无用户数据</div>
+                </div>
               </div>
             </section>
           </div>

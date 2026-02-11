@@ -951,15 +951,6 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  // 校验：必须先保存 API Key
-  if (keys.length === 0) {
-    errorDetails.textContent = "未保存 API Key，请先在设置页添加。";
-    errorDetails.hidden = true;
-    errorToggle.textContent = "查看详情";
-    errorBox.hidden = false;
-    return;
-  }
-
   // UI 进入加载状态
   setLoading(true);
   answerBox.textContent = "";
@@ -968,7 +959,11 @@ form.addEventListener("submit", async (event) => {
   liveAnswerRenderer.reset();
 
   try {
-    const queue = buildKeyQueue(keys);
+    const authUser = getAuthUser();
+    const isAdmin = authUser?.role === "admin";
+    const attempts = isAdmin ? buildKeyQueue(keys).slice() : [];
+    // 始终补一个“空 Key”尝试，交给后端走统一 API（或环境变量）兜底
+    attempts.push("");
     let lastError = "";
     let solved = false;
 
@@ -995,9 +990,11 @@ form.addEventListener("submit", async (event) => {
       return "不可用";
     };
 
-    for (const apiKey of queue) {
+    for (const apiKey of attempts) {
       const formData = new FormData();
-      formData.append("apiKey", apiKey);
+      if (apiKey) {
+        formData.append("apiKey", apiKey);
+      }
       if (prompt) formData.append("prompt", prompt);
       files.forEach((file) => {
         formData.append("image", file);
@@ -1021,21 +1018,23 @@ form.addEventListener("submit", async (event) => {
             openLoginModal(message || "请先登录后使用。");
             throw new Error(message);
           }
-          if (isKeyError(result.status, message)) {
+          if (apiKey && isKeyError(result.status, message)) {
             markInvalidKey(apiKey, getInvalidReason(result.status, message));
           }
           continue;
         }
 
-        clearInvalidKey(apiKey);
-        setNextKeyIndex(keys, apiKey);
+        if (apiKey) {
+          clearInvalidKey(apiKey);
+          setNextKeyIndex(keys, apiKey);
+        }
 
         const finalAnswer = result.answer || "暂无返回内容。";
         if (finalAnswer !== liveAnswerRenderer.getText()) {
           liveAnswerRenderer.render(finalAnswer);
         }
         liveAnswerRenderer.flush();
-        recordUsage(apiKey, result.usage);
+        recordUsage(apiKey || "统一API", result.usage);
         if (getAuthUser()) {
           window.dispatchEvent(new Event("history-updated"));
           if (historyModal && historyModal.classList.contains("is-open")) {

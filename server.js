@@ -1,7 +1,7 @@
 ﻿// 服务入口：
 // 1) 提供静态页面（public/）
 // 2) 接收前端表单/图片并转发给 Gemini
-// 3) 把答案与用量信息返回给浏览器
+// 3) 提供用户认证、管理员能力与历史记录能力
 
 // Node.js 内置模块与第三方依赖
 const fs = require("fs");
@@ -14,6 +14,10 @@ const bcrypt = require("bcryptjs");
 const {
   createUser,
   getUserByEmail,
+  getUserById,
+  setUserRoleByEmail,
+  updateUserById,
+  listUsersForAdmin,
   getSessionByToken,
   deleteSessionByToken,
   createSession,
@@ -23,6 +27,12 @@ const {
   countHistory,
   deleteHistoryByUser,
   getHistoryImage,
+  getHistoryImageById,
+  setVoiceprintForUser,
+  clearVoiceprintForUser,
+  getVoiceprintByUserId,
+  getUnifiedApiSetting,
+  upsertUnifiedApiSetting,
 } = require("./db");
 
 // Node 18+ 自带 fetch；旧版本用 node-fetch 兼容
@@ -48,7 +58,25 @@ const SESSION_TTL_DAYS = 30;
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 6;
 const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/i;
-// multer 瑙ｆ瀽 multipart/form-data锛涘唴瀛樺瓨鍌ㄤ究浜庣洿鎺ヨ浆 base64
+const VALID_ROLES = new Set(["user", "admin"]);
+const ADMIN_EMAIL = ((process.env.ADMIN_EMAIL || "2782760414@qq.com") || "")
+  .trim()
+  .toLowerCase();
+const VOICEPRINT_SIMILARITY_THRESHOLD = (() => {
+  const raw = Number.parseFloat(process.env.VOICEPRINT_SIMILARITY_THRESHOLD || "0.82");
+  if (Number.isFinite(raw) && raw > 0 && raw < 1) return raw;
+  return 0.82;
+})();
+const VOICEPRINT_MIN_DIMENSIONS = (() => {
+  const raw = Number.parseInt(process.env.VOICEPRINT_MIN_DIMENSIONS || "16", 10);
+  return Number.isInteger(raw) && raw > 0 ? raw : 16;
+})();
+const VOICEPRINT_MAX_DIMENSIONS = (() => {
+  const raw = Number.parseInt(process.env.VOICEPRINT_MAX_DIMENSIONS || "4096", 10);
+  return Number.isInteger(raw) && raw >= VOICEPRINT_MIN_DIMENSIONS ? raw : 4096;
+})();
+
+// multer 解析 multipart/form-data，内存存储便于直接转 base64
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -66,6 +94,14 @@ const parseCookies = (header) => {
 
 const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
+
+const normalizeEmail = (email) => (email || "").trim().toLowerCase();
+
+const parseIntegerId = (value) => {
+  const id = Number.parseInt(value, 10);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return id;
+};
 
 const shouldUseSecureCookie = (req) => {
   const forceSecure = (process.env.SESSION_COOKIE_SECURE || "").trim().toLowerCase();
@@ -113,15 +149,20 @@ const attachUser = (req, _res, next) => {
   const token = cookies[SESSION_COOKIE];
   if (!token) return next();
 
-  const session = getSessionByToken(hashToken(token));
+  const tokenHash = hashToken(token);
+  const session = getSessionByToken(tokenHash);
   if (!session) return next();
 
   if (session.expires_at && new Date(session.expires_at) < new Date()) {
-    deleteSessionByToken(hashToken(token));
+    deleteSessionByToken(tokenHash);
     return next();
   }
 
-  req.user = { id: session.user_id, email: session.email };
+  req.user = {
+    id: session.user_id,
+    email: session.email,
+    role: session.role || "user",
+  };
   req.sessionToken = token;
   return next();
 };
@@ -133,7 +174,15 @@ const requireAuth = (req, res, next) => {
   return next();
 };
 
-const normalizeEmail = (email) => (email || "").trim().toLowerCase();
+const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "请先登录。" });
+  }
+  if ((req.user.role || "user") !== "admin") {
+    return res.status(403).json({ error: "需要管理员权限。" });
+  }
+  return next();
+};
 
 const issueSession = (req, res, userId) => {
   const token = crypto.randomBytes(32).toString("hex");
@@ -157,6 +206,175 @@ const EXT_BY_MIME = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
   "image/webp": ".webp",
+};
+
+const toPublicUser = (user) => {
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role || "user",
+    voiceprintEnabled: Boolean(user.voiceprint_enabled),
+  };
+};
+
+const toHistoryItems = (records, options = {}) => {
+  const imageBase = options.imageBase || "/api/history/image";
+  return records.map((item) => ({
+    id: item.id,
+    time: item.created_at,
+    prompt: item.prompt,
+    answer: item.answer,
+    images: (item.images || []).map((image) => ({
+      id: image.id,
+      name: image.filename,
+      url: `${imageBase}/${image.id}`,
+      mimeType: image.mime_type,
+      size: image.size,
+    })),
+  }));
+};
+
+const safeJsonParse = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+};
+
+const normalizeVoiceprintVector = (rawVoiceprint, options = {}) => {
+  const required = Boolean(options.required);
+  if (typeof rawVoiceprint === "undefined" || rawVoiceprint === null || rawVoiceprint === "") {
+    if (required) {
+      return { error: "请提供声纹向量。" };
+    }
+    return { provided: false, vector: null };
+  }
+
+  let candidate = rawVoiceprint;
+  if (typeof candidate === "object" && candidate && !Array.isArray(candidate)) {
+    if (Array.isArray(candidate.vector)) {
+      candidate = candidate.vector;
+    }
+  } else if (typeof candidate === "string") {
+    const trimmed = candidate.trim();
+    if (!trimmed) {
+      if (required) return { error: "请提供声纹向量。" };
+      return { provided: false, vector: null };
+    }
+    if (trimmed.startsWith("[")) {
+      const parsed = safeJsonParse(trimmed);
+      if (!Array.isArray(parsed)) {
+        return { error: "声纹向量 JSON 格式不正确。" };
+      }
+      candidate = parsed;
+    } else {
+      candidate = trimmed.split(/[\s,]+/).filter(Boolean);
+    }
+  }
+
+  if (!Array.isArray(candidate)) {
+    return { error: "声纹向量必须是数组或可解析的数字序列。" };
+  }
+  if (candidate.length < VOICEPRINT_MIN_DIMENSIONS) {
+    return { error: `声纹向量维度过小，至少需要 ${VOICEPRINT_MIN_DIMENSIONS} 维。` };
+  }
+  if (candidate.length > VOICEPRINT_MAX_DIMENSIONS) {
+    return { error: `声纹向量维度过大，最多允许 ${VOICEPRINT_MAX_DIMENSIONS} 维。` };
+  }
+
+  const vector = [];
+  for (let i = 0; i < candidate.length; i += 1) {
+    const value = Number(candidate[i]);
+    if (!Number.isFinite(value)) {
+      return { error: `声纹向量第 ${i + 1} 维不是有效数字。` };
+    }
+    vector.push(value);
+  }
+
+  const squareSum = vector.reduce((sum, item) => sum + item * item, 0);
+  const norm = Math.sqrt(squareSum);
+  if (!Number.isFinite(norm) || norm <= 0) {
+    return { error: "声纹向量范数无效（不能全为 0）。" };
+  }
+
+  const normalized = vector.map((value) => Number((value / norm).toFixed(12)));
+  return { provided: true, vector: normalized };
+};
+
+const parseStoredVoiceprint = (text) => {
+  if (!text || typeof text !== "string") return null;
+  const parsed = safeJsonParse(text);
+  if (!Array.isArray(parsed)) return null;
+  const normalized = normalizeVoiceprintVector(parsed, { required: true });
+  if (normalized.error) return null;
+  return normalized.vector;
+};
+
+const cosineSimilarity = (left, right) => {
+  if (!Array.isArray(left) || !Array.isArray(right)) return null;
+  if (left.length === 0 || left.length !== right.length) return null;
+  let dot = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    dot += left[i] * right[i];
+  }
+  if (!Number.isFinite(dot)) return null;
+  if (dot > 1) return 1;
+  if (dot < -1) return -1;
+  return dot;
+};
+
+const verifyVoiceprintForLogin = (user, rawVoiceprint) => {
+  if (!Boolean(user?.voiceprint_enabled)) {
+    return { ok: true };
+  }
+
+  const incoming = normalizeVoiceprintVector(rawVoiceprint, { required: true });
+  if (incoming.error) {
+    return {
+      ok: false,
+      status: 400,
+      error: `该账号已启用声纹识别。${incoming.error}`,
+      code: "VOICEPRINT_REQUIRED",
+    };
+  }
+
+  const stored = parseStoredVoiceprint(user.voiceprint_vector);
+  if (!stored) {
+    return {
+      ok: false,
+      status: 500,
+      error: "账号声纹数据异常，请联系管理员或重新录入声纹。",
+      code: "VOICEPRINT_CORRUPTED",
+    };
+  }
+
+  const similarity = cosineSimilarity(incoming.vector, stored);
+  if (similarity === null) {
+    return {
+      ok: false,
+      status: 401,
+      error: "声纹维度不匹配或数据异常。",
+      code: "VOICEPRINT_MISMATCH",
+    };
+  }
+
+  if (similarity < VOICEPRINT_SIMILARITY_THRESHOLD) {
+    return {
+      ok: false,
+      status: 401,
+      error: "声纹验证失败。",
+      code: "VOICEPRINT_MISMATCH",
+      similarity: Number(similarity.toFixed(4)),
+      threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+    };
+  }
+
+  return {
+    ok: true,
+    similarity: Number(similarity.toFixed(4)),
+  };
 };
 
 const saveHistoryForUser = (user, prompt, answer, files) => {
@@ -187,22 +405,89 @@ const saveHistoryForUser = (user, prompt, answer, files) => {
   return historyId;
 };
 
+const deleteFilesSafely = (paths) => {
+  (paths || []).forEach((filePath) => {
+    try {
+      if (filePath && fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      // 忽略单个文件删除失败，避免阻塞整体清理
+    }
+  });
+};
+
 const normalizeModelName = (model) => {
   const value = (model || DEFAULT_MODEL).trim();
   const normalized = (value || DEFAULT_MODEL).replace(/^models\//, "");
   return normalized || DEFAULT_MODEL;
 };
 
+const maskApiKey = (apiKey) => {
+  if (!apiKey) return null;
+  if (apiKey.length <= 8) {
+    return `${apiKey.slice(0, 2)}****`;
+  }
+  return `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
+};
+
+const getUnifiedApiView = () => {
+  const setting = getUnifiedApiSetting();
+  const value = (setting?.setting_value || "").trim();
+  return {
+    hasKey: Boolean(value),
+    masked: value ? maskApiKey(value) : null,
+    updatedAt: setting?.updated_at || null,
+    updatedBy: setting?.updated_by_email || null,
+  };
+};
+
+const resolveApiKeyForSolve = (req) => {
+  const bodyApiKey = (req.body?.apiKey || "").trim();
+  const setting = getUnifiedApiSetting();
+  const unifiedApiKey = (setting?.setting_value || "").trim();
+  const envApiKey = (process.env.GEMINI_API_KEY || "").trim();
+  const defaultApiKey = unifiedApiKey || envApiKey;
+  const isAdmin = (req.user?.role || "user") === "admin";
+
+  if (isAdmin && bodyApiKey) {
+    return { apiKey: bodyApiKey, source: "admin_override" };
+  }
+
+  if (defaultApiKey) {
+    return {
+      apiKey: defaultApiKey,
+      source: unifiedApiKey ? "unified" : "env",
+    };
+  }
+
+  if (isAdmin) {
+    return {
+      error: {
+        status: 400,
+        message: "未提供 API Key，且系统未配置统一 API Key。",
+      },
+    };
+  }
+
+  return {
+    error: {
+      status: 400,
+      message: "系统未配置统一 API Key，请联系管理员。",
+    },
+  };
+};
+
 // 统一构建解题请求入参，供普通/流式接口复用
 const buildSolvePayload = (req) => {
-  const apiKey = (req.body?.apiKey || process.env.GEMINI_API_KEY || "").trim();
+  const auth = resolveApiKeyForSolve(req);
+  if (auth.error) {
+    return { error: auth.error };
+  }
+
   const normalizedModel = normalizeModelName(req.body?.model || DEFAULT_MODEL);
   const prompt = (req.body?.prompt || "").trim();
   const files = Array.isArray(req.files) ? req.files : [];
-
-  if (!apiKey) {
-    return { error: { status: 400, message: "未提供 API Key。" } };
-  }
 
   if (!prompt && files.length === 0) {
     return { error: { status: 400, message: "请填写题目或上传图片。" } };
@@ -226,11 +511,12 @@ const buildSolvePayload = (req) => {
   });
 
   return {
-    apiKey,
+    apiKey: auth.apiKey,
     parts,
     normalizedModel,
     prompt,
     files,
+    apiKeySource: auth.source,
   };
 };
 
@@ -283,14 +569,6 @@ const extractTextFromResponse = (payload) => {
   });
 
   return texts.join("");
-};
-
-const safeJsonParse = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    return null;
-  }
 };
 
 // 兼容 SSE 的两种 data 形态：
@@ -357,6 +635,21 @@ const callGenerateContent = async ({ apiKey, normalizedModel, parts, signal }) =
   return { ok: true, status: response.status, data };
 };
 
+const ensureAdminRoleOnStartup = () => {
+  if (!ADMIN_EMAIL) return;
+  try {
+    const adminUser = getUserByEmail(ADMIN_EMAIL);
+    if (!adminUser) return;
+    if ((adminUser.role || "user") === "admin") return;
+    setUserRoleByEmail(ADMIN_EMAIL, "admin");
+    console.log(`[auth] 已将 ${ADMIN_EMAIL} 设置为管理员。`);
+  } catch (error) {
+    console.error("[auth] 管理员角色初始化失败：", error);
+  }
+};
+
+ensureAdminRoleOnStartup();
+
 app.use(express.json({ limit: "1mb" }));
 app.use(attachUser);
 app.use(express.static(path.join(__dirname, "public")));
@@ -365,6 +658,7 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const password = (req.body?.password || "").trim();
+    const voiceprintInput = req.body?.voiceprint;
 
     if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ error: "邮箱格式不正确。" });
@@ -378,14 +672,34 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(409).json({ error: "该邮箱已注册。" });
     }
 
+    const voiceprint = normalizeVoiceprintVector(voiceprintInput, { required: false });
+    if (voiceprint.error) {
+      return res.status(400).json({ error: voiceprint.error });
+    }
+
     const hash = await bcrypt.hash(password, 10);
-    const user = createUser(email, hash);
+    const role = email === ADMIN_EMAIL ? "admin" : "user";
+    let user = createUser(
+      email,
+      hash,
+      role,
+      voiceprint.provided ? JSON.stringify(voiceprint.vector) : null,
+      voiceprint.provided
+    );
+
+    // 兜底保证管理员邮箱始终是 admin
+    if (email === ADMIN_EMAIL && user.role !== "admin") {
+      setUserRoleByEmail(email, "admin");
+      user = getUserByEmail(email);
+    }
+
     issueSession(req, res, user.id);
-    return res.json({ user: { id: user.id, email: user.email } });
+    return res.json({ user: toPublicUser(user) });
   } catch (err) {
     return res.status(500).json({ error: "注册失败。", details: String(err) });
   }
 });
+
 app.post("/api/auth/login", async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
@@ -398,7 +712,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(400).json({ error: "请输入密码。" });
     }
 
-    const user = getUserByEmail(email);
+    let user = getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: "账号或密码错误。" });
     }
@@ -408,12 +722,37 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "账号或密码错误。" });
     }
 
+    // 若管理员邮箱用户因旧数据异常被降权，这里再兜底拉回 admin
+    if (email === ADMIN_EMAIL && (user.role || "user") !== "admin") {
+      setUserRoleByEmail(email, "admin");
+      user = getUserByEmail(email);
+    }
+
+    const voiceprintCheck = verifyVoiceprintForLogin(user, req.body?.voiceprint);
+    if (!voiceprintCheck.ok) {
+      return res.status(voiceprintCheck.status).json({
+        error: voiceprintCheck.error,
+        code: voiceprintCheck.code,
+        similarity: voiceprintCheck.similarity ?? null,
+        threshold: voiceprintCheck.threshold ?? VOICEPRINT_SIMILARITY_THRESHOLD,
+      });
+    }
+
     issueSession(req, res, user.id);
-    return res.json({ user: { id: user.id, email: user.email } });
+    return res.json({
+      user: toPublicUser(user),
+      voiceprint: {
+        required: Boolean(user.voiceprint_enabled),
+        verified: Boolean(user.voiceprint_enabled),
+        similarity: voiceprintCheck.similarity ?? null,
+        threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ error: "登录失败。", details: String(err) });
   }
 });
+
 app.post("/api/auth/logout", (req, res) => {
   clearSession(req, res, req.sessionToken);
   return res.json({ ok: true });
@@ -423,23 +762,50 @@ app.get("/api/auth/me", (req, res) => {
   if (!req.user) {
     return res.json({ user: null });
   }
-  return res.json({ user: { id: req.user.id, email: req.user.email } });
+  const latestUser = getUserById(req.user.id);
+  if (!latestUser) {
+    return res.json({ user: null });
+  }
+  return res.json({ user: toPublicUser(latestUser) });
+});
+
+app.get("/api/auth/voiceprint/status", requireAuth, (req, res) => {
+  const voiceprint = getVoiceprintByUserId(req.user.id);
+  const enabled = Boolean(voiceprint?.voiceprint_enabled);
+  const hasVoiceprint = Boolean(voiceprint?.voiceprint_vector);
+  return res.json({
+    enabled,
+    enrolled: enabled,
+    hasVoiceprint,
+    threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+  });
+});
+
+app.post("/api/auth/voiceprint/enroll", requireAuth, (req, res) => {
+  const voiceprint = normalizeVoiceprintVector(req.body?.voiceprint, { required: true });
+  if (voiceprint.error) {
+    return res.status(400).json({ error: voiceprint.error });
+  }
+
+  setVoiceprintForUser(req.user.id, JSON.stringify(voiceprint.vector));
+  return res.json({
+    ok: true,
+    enabled: true,
+    enrolled: true,
+    hasVoiceprint: true,
+    dimensions: voiceprint.vector.length,
+    threshold: VOICEPRINT_SIMILARITY_THRESHOLD,
+    updatedAt: new Date().toISOString(),
+  });
+});
+
+app.delete("/api/auth/voiceprint", requireAuth, (req, res) => {
+  clearVoiceprintForUser(req.user.id);
+  return res.json({ ok: true, enabled: false, enrolled: false, hasVoiceprint: false });
 });
 
 app.get("/api/history", requireAuth, (req, res) => {
-  const items = listHistory(req.user.id).map((item) => ({
-    id: item.id,
-    time: item.created_at,
-    prompt: item.prompt,
-    answer: item.answer,
-    images: (item.images || []).map((image) => ({
-      id: image.id,
-      name: image.filename,
-      url: `/api/history/image/${image.id}`,
-      mimeType: image.mime_type,
-      size: image.size,
-    })),
-  }));
+  const items = toHistoryItems(listHistory(req.user.id));
   return res.json({ items });
 });
 
@@ -450,21 +816,13 @@ app.get("/api/history/summary", requireAuth, (req, res) => {
 
 app.delete("/api/history", requireAuth, (req, res) => {
   const paths = deleteHistoryByUser(req.user.id);
-  paths.forEach((filePath) => {
-    try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    } catch (error) {
-      // 忽略单个文件删除失败，避免阻塞整体清理
-    }
-  });
+  deleteFilesSafely(paths);
   return res.json({ ok: true });
 });
 
 app.get("/api/history/image/:imageId", requireAuth, (req, res) => {
-  const imageId = Number.parseInt(req.params.imageId, 10);
-  if (Number.isNaN(imageId)) {
+  const imageId = parseIntegerId(req.params.imageId);
+  if (!imageId) {
     return res.status(400).json({ error: "图片不存在。" });
   }
   const image = getHistoryImage(req.user.id, imageId);
@@ -477,6 +835,223 @@ app.get("/api/history/image/:imageId", requireAuth, (req, res) => {
   res.setHeader("Content-Type", image.mime_type);
   return res.sendFile(path.resolve(image.path));
 });
+
+app.get("/api/admin/users", requireAuth, requireAdmin, (_req, res) => {
+  const items = listUsersForAdmin().map((item) => ({
+    id: item.id,
+    email: item.email,
+    role: item.role || "user",
+    createdAt: item.created_at,
+    historyCount: item.history_count || 0,
+    voiceprintEnabled: Boolean(item.voiceprint_enabled),
+  }));
+  return res.json({ items });
+});
+
+app.get("/api/admin/users/:userId", requireAuth, requireAdmin, (req, res) => {
+  const userId = parseIntegerId(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ error: "用户 ID 不合法。" });
+  }
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "用户不存在。" });
+  }
+  return res.json({
+    user: {
+      id: targetUser.id,
+      email: targetUser.email,
+      role: targetUser.role || "user",
+      createdAt: targetUser.created_at,
+      voiceprintEnabled: Boolean(targetUser.voiceprint_enabled),
+      hasVoiceprint: Boolean(targetUser.voiceprint_vector),
+      historyCount: countHistory(targetUser.id),
+    },
+  });
+});
+
+app.patch("/api/admin/users/:userId", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const userId = parseIntegerId(req.params.userId);
+    if (!userId) {
+      return res.status(400).json({ error: "用户 ID 不合法。" });
+    }
+
+    const targetUser = getUserById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "用户不存在。" });
+    }
+
+    const updates = {};
+    const body = req.body || {};
+
+    if (Object.prototype.hasOwnProperty.call(body, "email")) {
+      const email = normalizeEmail(body.email);
+      if (!EMAIL_REGEX.test(email)) {
+        return res.status(400).json({ error: "邮箱格式不正确。" });
+      }
+      const existing = getUserByEmail(email);
+      if (existing && existing.id !== targetUser.id) {
+        return res.status(409).json({ error: "该邮箱已被占用。" });
+      }
+      updates.email = email;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "password")) {
+      const password = (body.password || "").trim();
+      if (password.length < PASSWORD_MIN_LENGTH) {
+        return res
+          .status(400)
+          .json({ error: `密码至少 ${PASSWORD_MIN_LENGTH} 位。` });
+      }
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "role")) {
+      const role = String(body.role || "").trim().toLowerCase();
+      if (!VALID_ROLES.has(role)) {
+        return res.status(400).json({ error: "角色仅支持 user/admin。" });
+      }
+      if (targetUser.id === req.user.id && role !== "admin") {
+        return res.status(400).json({ error: "不能将当前登录管理员降权。" });
+      }
+      const finalEmail = normalizeEmail(updates.email || targetUser.email);
+      if (finalEmail === ADMIN_EMAIL && role !== "admin") {
+        return res.status(400).json({ error: "系统管理员邮箱不能被降为普通用户。" });
+      }
+      updates.role = role;
+    }
+
+    // 管理员邮箱必须为 admin
+    const resultingEmail = normalizeEmail(updates.email || targetUser.email);
+    if (resultingEmail === ADMIN_EMAIL) {
+      updates.role = "admin";
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "没有可更新字段。" });
+    }
+
+    let updatedUser;
+    try {
+      updatedUser = updateUserById(targetUser.id, updates);
+    } catch (error) {
+      if (String(error).includes("UNIQUE constraint failed: users.email")) {
+        return res.status(409).json({ error: "该邮箱已被占用。" });
+      }
+      throw error;
+    }
+
+    return res.json({
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role || "user",
+        createdAt: updatedUser.created_at,
+        voiceprintEnabled: Boolean(updatedUser.voiceprint_enabled),
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "更新用户失败。", details: String(err) });
+  }
+});
+
+app.get("/api/admin/users/:userId/history", requireAuth, requireAdmin, (req, res) => {
+  const userId = parseIntegerId(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ error: "用户 ID 不合法。" });
+  }
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "用户不存在。" });
+  }
+
+  const items = toHistoryItems(listHistory(userId), {
+    imageBase: "/api/admin/history/image",
+  });
+  return res.json({
+    user: {
+      id: targetUser.id,
+      email: targetUser.email,
+      role: targetUser.role || "user",
+    },
+    items,
+  });
+});
+
+app.delete("/api/admin/users/:userId/history", requireAuth, requireAdmin, (req, res) => {
+  const userId = parseIntegerId(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ error: "用户 ID 不合法。" });
+  }
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "用户不存在。" });
+  }
+
+  const paths = deleteHistoryByUser(userId);
+  deleteFilesSafely(paths);
+  return res.json({ ok: true, deletedFiles: paths.length });
+});
+
+app.delete("/api/admin/users/:userId/voiceprint", requireAuth, requireAdmin, (req, res) => {
+  const userId = parseIntegerId(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ error: "用户 ID 不合法。" });
+  }
+
+  const targetUser = getUserById(userId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "用户不存在。" });
+  }
+
+  const updatedUser = clearVoiceprintForUser(userId);
+  return res.json({
+    ok: true,
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      role: updatedUser.role || "user",
+      voiceprintEnabled: Boolean(updatedUser.voiceprint_enabled),
+      hasVoiceprint: Boolean(updatedUser.voiceprint_vector),
+    },
+  });
+});
+
+app.get("/api/admin/history/image/:imageId", requireAuth, requireAdmin, (req, res) => {
+  const imageId = parseIntegerId(req.params.imageId);
+  if (!imageId) {
+    return res.status(400).json({ error: "图片不存在。" });
+  }
+  const image = getHistoryImageById(imageId);
+  if (!image || !image.path) {
+    return res.status(404).json({ error: "图片不存在。" });
+  }
+  if (!fs.existsSync(image.path)) {
+    return res.status(404).json({ error: "图片文件不存在。" });
+  }
+  res.setHeader("Content-Type", image.mime_type);
+  return res.sendFile(path.resolve(image.path));
+});
+
+app.get("/api/admin/unified-api", requireAuth, requireAdmin, (_req, res) => {
+  return res.json(getUnifiedApiView());
+});
+
+app.put("/api/admin/unified-api", requireAuth, requireAdmin, (req, res) => {
+  const apiKey = (req.body?.apiKey || "").trim();
+  if (!apiKey) {
+    return res.status(400).json({ error: "apiKey 不能为空。" });
+  }
+  upsertUnifiedApiSetting(apiKey, req.user.id);
+  return res.json(getUnifiedApiView());
+});
+
+app.delete("/api/admin/unified-api", requireAuth, requireAdmin, (req, res) => {
+  upsertUnifiedApiSetting(null, req.user.id);
+  return res.json(getUnifiedApiView());
+});
+
 app.post(
   "/api/solve",
   requireAuth,
@@ -496,7 +1071,6 @@ app.post(
       const data = result.data || {};
 
       const answer = extractTextFromResponse(data).trim();
-
       const usage = data?.usageMetadata || null;
 
       if (req.user && answer) {
@@ -519,7 +1093,6 @@ app.post(
   }
 );
 
-// 鍋ュ悍妫€鏌ワ細閮ㄧ讲鎴栫洃鎺у彲鐢ㄦ潵鎺㈡椿
 app.post(
   "/api/solve-stream",
   requireAuth,
@@ -572,125 +1145,125 @@ app.post(
         signal: controller.signal,
       });
 
-    if (!upstream.ok) {
-      let errorData = null;
-      try {
-        errorData = await upstream.json();
-      } catch (error) {
-        errorData = null;
+      if (!upstream.ok) {
+        let errorData = null;
+        try {
+          errorData = await upstream.json();
+        } catch (error) {
+          errorData = null;
+        }
+        const message = errorData?.error?.message || "Gemini API error.";
+        return res.status(upstream.status).json({ error: message, details: errorData });
       }
-      const message = errorData?.error?.message || "Gemini API error.";
-      return res.status(upstream.status).json({ error: message, details: errorData });
-    }
 
-    if (!upstream.body) {
-      return res.status(502).json({ error: "Empty stream response." });
-    }
-
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
-    const reader = upstream.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let usage = null;
-    let answerText = "";
-    let lastParsedPayload = null;
-
-    const sendEvent = (type, data) => {
-      res.write(`event: ${type}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-      if (typeof res.flush === "function") {
-        res.flush();
+      if (!upstream.body) {
+        return res.status(502).json({ error: "Empty stream response." });
       }
-    };
 
-    const handleChunk = (raw) => {
-      const payloads = parseSsePayloads(raw);
-      if (payloads.length === 0) return;
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
 
-      payloads.forEach((parsed) => {
-        lastParsedPayload = parsed;
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        list.forEach((item) => {
-          if (item?.usageMetadata) {
-            usage = item.usageMetadata;
-          }
+      const reader = upstream.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let usage = null;
+      let answerText = "";
+      let lastParsedPayload = null;
+
+      const sendEvent = (type, data) => {
+        res.write(`event: ${type}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (typeof res.flush === "function") {
+          res.flush();
+        }
+      };
+
+      const handleChunk = (raw) => {
+        const payloads = parseSsePayloads(raw);
+        if (payloads.length === 0) return;
+
+        payloads.forEach((parsed) => {
+          lastParsedPayload = parsed;
+          const list = Array.isArray(parsed) ? parsed : [parsed];
+          list.forEach((item) => {
+            if (item?.usageMetadata) {
+              usage = item.usageMetadata;
+            }
+          });
+
+          const text = extractTextFromResponse(parsed);
+          if (!text) return;
+          answerText += text;
+          sendEvent("chunk", { text });
         });
+      };
 
-        const text = extractTextFromResponse(parsed);
-        if (!text) return;
-        answerText += text;
-        sendEvent("chunk", { text });
-      });
-    };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() || "";
+        blocks.forEach(handleChunk);
+      }
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split(/\r?\n\r?\n/);
-      buffer = blocks.pop() || "";
-      blocks.forEach(handleChunk);
-    }
+      if (buffer.trim()) {
+        handleChunk(buffer);
+      }
 
-    if (buffer.trim()) {
-      handleChunk(buffer);
-    }
-
-    // 若上游流式未返回可显示文本，补一次非流式请求兜底，避免前端出现空答案
-    if (!answerText.trim()) {
-      const fallback = await callGenerateContent({
-        apiKey,
-        normalizedModel,
-        parts,
-        signal: controller.signal,
-      });
-      if (!fallback.ok) {
-        sendEvent("error", {
-          status: fallback.status,
-          message: fallback.message || "请求失败。",
-          details: fallback.data || lastParsedPayload || null,
+      // 若上游流式未返回可显示文本，补一次非流式请求兜底，避免前端出现空答案
+      if (!answerText.trim()) {
+        const fallback = await callGenerateContent({
+          apiKey,
+          normalizedModel,
+          parts,
+          signal: controller.signal,
         });
-        return res.end();
+        if (!fallback.ok) {
+          sendEvent("error", {
+            status: fallback.status,
+            message: fallback.message || "请求失败。",
+            details: fallback.data || lastParsedPayload || null,
+          });
+          return res.end();
+        }
+
+        const fallbackText = extractTextFromResponse(fallback.data).trim();
+        if (!fallbackText) {
+          const blockReason =
+            fallback.data?.promptFeedback?.blockReason ||
+            lastParsedPayload?.promptFeedback?.blockReason ||
+            null;
+          const message = blockReason
+            ? `模型未返回可显示文本（${blockReason}）。`
+            : "模型未返回可显示文本。";
+          sendEvent("error", {
+            status: 502,
+            message,
+            details: fallback.data || lastParsedPayload || null,
+          });
+          return res.end();
+        }
+
+        answerText = fallbackText;
+        if (fallback.data?.usageMetadata) {
+          usage = fallback.data.usageMetadata;
+        }
+        sendEvent("chunk", { text: fallbackText });
       }
 
-      const fallbackText = extractTextFromResponse(fallback.data).trim();
-      if (!fallbackText) {
-        const blockReason =
-          fallback.data?.promptFeedback?.blockReason ||
-          lastParsedPayload?.promptFeedback?.blockReason ||
-          null;
-        const message = blockReason
-          ? `模型未返回可显示文本（${blockReason}）。`
-          : "模型未返回可显示文本。";
-        sendEvent("error", {
-          status: 502,
-          message,
-          details: fallback.data || lastParsedPayload || null,
-        });
-        return res.end();
+      if (req.user && answerText.trim()) {
+        try {
+          saveHistoryForUser(req.user, prompt, answerText, files);
+        } catch (error) {
+          // 历史保存失败不影响答题主流程
+        }
       }
 
-      answerText = fallbackText;
-      if (fallback.data?.usageMetadata) {
-        usage = fallback.data.usageMetadata;
-      }
-      sendEvent("chunk", { text: fallbackText });
-    }
-
-    if (req.user && answerText.trim()) {
-      try {
-        saveHistoryForUser(req.user, prompt, answerText, files);
-      } catch (error) {
-        // 历史保存失败不影响答题主流程
-      }
-    }
-
-    sendEvent("done", { usage, model: normalizedModel });
+      sendEvent("done", { usage, model: normalizedModel });
       return res.end();
     } catch (err) {
       if (err?.name === "AbortError") {
@@ -709,12 +1282,8 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-// 鍚姩鏈嶅姟
+// 启动服务
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
-
-
-
-

@@ -1,704 +1,722 @@
-﻿(function () {
-  // 设置页脚本：管理 API Key 与使用次数
-  const keysInput = document.getElementById("keysInput");
-  const toggleKeysBtn = document.getElementById("toggleKeysBtn");
-  const saveKeysBtn = document.getElementById("saveKeysBtn");
-  const clearKeysBtn = document.getElementById("clearKeysBtn");
-  const keysSummary = document.getElementById("keysSummary");
-  const keyList = document.getElementById("keyList");
+(function () {
+  "use strict";
 
-  const usageTotalSummary = document.getElementById("usageTotalSummary");
-  const openUsageBtn = document.getElementById("openUsageBtn");
-  const usageModal = document.getElementById("usageModal");
-  const usageTodaySummary = document.getElementById("usageTodaySummary");
-  const usageTodayList = document.getElementById("usageTodayList");
-  const usageHistorySummary = document.getElementById("usageHistorySummary");
-  const usageHistoryList = document.getElementById("usageHistoryList");
-  const usageChart = document.getElementById("usageChart");
-  const chartRangeLabel = document.getElementById("chartRangeLabel");
-  const usageTabs = document.querySelectorAll("[data-usage-tab]");
-  const usagePanels = document.querySelectorAll("[data-usage-panel]");
+  // 设置页逻辑：认证、声纹、Key、统计、管理员
+  const q = (id) => document.getElementById(id);
+  const e = {
+    authEmail: q("authEmail"),
+    authPassword: q("authPassword"),
+    authStatus: q("authStatus"),
+    authMessage: q("authMessage"),
+    loginBtn: q("loginBtn"),
+    registerBtn: q("registerBtn"),
+    logoutBtn: q("logoutBtn"),
+    voiceBadge: q("voiceprintBadge"),
+    voiceStatus: q("voiceprintStatus"),
+    voiceRecordBtn: q("recordVoiceprintBtn"),
+    voiceSaveBtn: q("saveVoiceprintBtn"),
+    voiceClearBtn: q("clearVoiceprintBtn"),
+    keysInput: q("keysInput"),
+    toggleKeysBtn: q("toggleKeysBtn"),
+    saveKeysBtn: q("saveKeysBtn"),
+    clearKeysBtn: q("clearKeysBtn"),
+    keysSummary: q("keysSummary"),
+    keyList: q("keyList"),
+    usageTotalSummary: q("usageTotalSummary"),
+    usageTodaySummary: q("usageTodaySummary"),
+    usageTodayList: q("usageTodayList"),
+    usageHistorySummary: q("usageHistorySummary"),
+    usageHistoryList: q("usageHistoryList"),
+    openUsageBtn: q("openUsageBtn"),
+    usageModal: q("usageModal"),
+    usageTabs: Array.from(document.querySelectorAll("[data-usage-tab]")),
+    usagePanels: Array.from(document.querySelectorAll("[data-usage-panel]")),
+    historySummary: q("historySummary"),
+    clearHistoryBtn: q("clearHistoryBtn"),
+    adminConsole: q("adminConsole"),
+    adminConsoleStatus: q("adminConsoleStatus"),
+    unifiedApiStatus: q("unifiedApiStatus"),
+    unifiedApiKeyInput: q("unifiedApiKeyInput"),
+    saveUnifiedApiBtn: q("saveUnifiedApiBtn"),
+    clearUnifiedApiBtn: q("clearUnifiedApiBtn"),
+    refreshAdminUsersBtn: q("refreshAdminUsersBtn"),
+    adminUsersStatus: q("adminUsersStatus"),
+    adminUsersList: q("adminUsersList"),
+  };
 
-  const authEmail = document.getElementById("authEmail");
-  const authPassword = document.getElementById("authPassword");
-  const authStatus = document.getElementById("authStatus");
-  const authMessage = document.getElementById("authMessage");
-  const loginBtn = document.getElementById("loginBtn");
-  const registerBtn = document.getElementById("registerBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
-
-  const clearHistoryBtn = document.getElementById("clearHistoryBtn");
-  const historySummary = document.getElementById("historySummary");
-
-  const STORAGE = {
+  const S = {
     keys: "gemini_api_keys",
     usage: "gemini_usage",
     keyIndex: "gemini_key_index",
     invalidKeys: "gemini_invalid_keys",
-    chartZoom: "gemini_usage_zoom_hours",
     keysVisibility: "gemini_keys_visibility",
   };
 
-  const authState = { user: null };
+  const state = {
+    user: null,
+    voice: {
+      local: null,
+      recording: false,
+      enrolled: false,
+      apiOk: true,
+      supported:
+        typeof navigator !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia) &&
+        Boolean(window.AudioContext || window.webkitAudioContext),
+    },
+  };
+
+  const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
+  const isAdmin = () => state.user?.role === "admin";
+  const isApiUnavailable = (status) => status === 404 || status === 405 || status === 501;
+  const load = (k, d) => {
+    try {
+      const raw = localStorage.getItem(k);
+      return raw ? JSON.parse(raw) : d;
+    } catch (_e) {
+      return d;
+    }
+  };
+  const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  const tone = (node, text, k = "") => {
+    if (!node) return;
+    node.textContent = text || "";
+    if (k) node.dataset.tone = k;
+    else node.removeAttribute("data-tone");
+  };
+  const setAuthMessage = (text, toneKey = "") => tone(e.authMessage, text, toneKey);
+  const mask = (key) => {
+    const v = String(key || "").trim();
+    if (!v) return "****";
+    if (v.length <= 8) return v;
+    return `${v.slice(0, 4)}...${v.slice(-4)}`;
+  };
+  const escapeHtml = (t) =>
+    String(t || "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] || ch));
+  const fmt = (v) => {
+    if (!v) return "-";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return d.toLocaleString("zh-CN", { hour12: false });
+  };
 
   const fetchJson = async (url, options = {}) => {
-    const response = await fetch(url, {
-      credentials: "same-origin",
-      ...options,
-    });
+    let r;
+    try {
+      r = await fetch(url, { credentials: "same-origin", ...options });
+    } catch (_e) {
+      return { ok: false, status: 0, message: "网络请求失败。", data: null };
+    }
     let data = null;
     try {
-      data = await response.json();
-    } catch (error) {
+      data = await r.json();
+    } catch (_e) {
       data = null;
     }
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        message: data?.error || "请求失败。",
-        data,
-      };
-    }
-    return { ok: true, status: response.status, data };
+    if (!r.ok) return { ok: false, status: r.status, message: data?.error || "请求失败。", data };
+    return { ok: true, status: r.status, data };
   };
 
-  const setAuthMessage = (text, tone = "") => {
-    if (!authMessage) return;
-    authMessage.textContent = text || "";
-    if (tone) {
-      authMessage.dataset.tone = tone;
-    } else {
-      authMessage.removeAttribute("data-tone");
-    }
+  const getSavedKeys = () => {
+    const keys = load(S.keys, []);
+    return Array.isArray(keys) ? keys : [];
   };
-
-  const syncAuthControls = () => {
-    const loggedIn = Boolean(authState.user);
-
-    if (loginBtn) {
-      loginBtn.hidden = loggedIn;
-    }
-    if (registerBtn) {
-      registerBtn.hidden = loggedIn;
-    }
-    if (logoutBtn) {
-      logoutBtn.hidden = !loggedIn;
-    }
-    if (authEmail) {
-      authEmail.disabled = loggedIn;
-      if (loggedIn && authState.user?.email) {
-        authEmail.value = authState.user.email;
-      }
-    }
-    if (authPassword) {
-      authPassword.disabled = loggedIn;
-      if (loggedIn) {
-        authPassword.value = "";
-      }
-    }
+  const getInvalidMap = () => {
+    const map = load(S.invalidKeys, {});
+    return map && typeof map === "object" ? map : {};
   };
-
-  const renderAuthStatus = () => {
-    if (!authStatus) return;
-    if (authState.user) {
-      authStatus.textContent = `已登录：${authState.user.email}`;
-    } else {
-      authStatus.textContent = "未登录";
-    }
-    syncAuthControls();
-  };
-
-  const setAuthUser = (user) => {
-    authState.user = user || null;
-    if (authState.user) {
-      setAuthMessage("");
-    }
-    renderAuthStatus();
-    renderHistorySummary();
-    window.dispatchEvent(new CustomEvent("auth-changed", { detail: authState.user }));
-  };
-
-  const refreshAuth = async () => {
-    const result = await fetchJson("/api/auth/me");
-    if (!result.ok) {
-      setAuthUser(null);
-      return;
-    }
-    setAuthUser(result.data?.user || null);
-  };
-
-  const submitAuth = async (mode) => {
-    if (!authEmail || !authPassword) return;
-    if (authState.user) {
-      setAuthMessage(
-        `当前已登录：${authState.user.email}。如需切换账号，请先退出登录。`
-      );
-      return;
-    }
-    const email = authEmail.value.trim();
-    const password = authPassword.value.trim();
-    if (!email || !password) {
-      setAuthMessage("请输入邮箱和密码。", "error");
-      return;
-    }
-    setAuthMessage("正在处理...");
-    const result = await fetchJson(`/api/auth/${mode}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!result.ok) {
-      setAuthMessage(result.message || "操作失败。", "error");
-      return;
-    }
-    authPassword.value = "";
-    setAuthMessage(mode === "register" ? "注册成功，已登录。" : "登录成功。");
-    setAuthUser(result.data?.user || null);
-  };
-
-  const maskKey = (key) => {
-    if (!key) return "****";
-    const trimmed = key.trim();
-    if (trimmed.length <= 8) return trimmed;
-    return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
-  };
-
-  const loadKeys = () => {
-    try {
-      const raw = localStorage.getItem(STORAGE.keys);
-      return raw ? JSON.parse(raw) : [];
-    } catch (error) {
-      return [];
-    }
-  };
-
-  const loadInvalidKeys = () => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE.invalidKeys) || "{}");
-    } catch (error) {
-      return {};
-    }
-  };
-
-  const saveInvalidKeys = (map) => {
-    localStorage.setItem(STORAGE.invalidKeys, JSON.stringify(map));
-  };
-
-  const syncInvalidKeys = (keys) => {
-    const map = loadInvalidKeys();
-    const normalized = new Set(keys.map((key) => key.trim()));
-    const next = {};
-    Object.entries(map).forEach(([key, value]) => {
-      if (normalized.has(key)) {
-        next[key] = value;
-      }
-    });
-    if (Object.keys(next).length !== Object.keys(map).length) {
-      saveInvalidKeys(next);
-    }
-    return next;
-  };
-
-  const getKeyIndex = (length) => {
-    const rawIndex = Number.parseInt(
-      localStorage.getItem(STORAGE.keyIndex) || "0",
-      10
-    );
-    if (!Number.isFinite(length) || length <= 0) return 0;
-    const safeIndex = Number.isNaN(rawIndex) ? 0 : rawIndex;
-    return ((safeIndex % length) + length) % length;
-  };
-
-  const buildKeyQueue = (keys, invalidMap) => {
-    const startIndex = getKeyIndex(keys.length);
-    const rotated = keys.slice(startIndex).concat(keys.slice(0, startIndex));
-    const validKeys = rotated.filter((key) => !invalidMap[key.trim()]);
-    return validKeys.length ? validKeys : rotated;
-  };
-
-  const saveKeys = (keys) => {
-    localStorage.setItem(STORAGE.keys, JSON.stringify(keys));
-  };
-
-  const parseKeys = (text) => {
-    const lines = text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    return Array.from(new Set(lines));
-  };
-
-  const getKeysVisibility = () =>
-    localStorage.getItem(STORAGE.keysVisibility) === "show";
-
-  const applyKeysVisibility = (visible) => {
-    if (!toggleKeysBtn || !keysInput) return;
-    keysInput.classList.toggle("masked", !visible);
-    toggleKeysBtn.textContent = visible ? "隐藏" : "显示";
-    toggleKeysBtn.setAttribute("aria-pressed", visible ? "true" : "false");
-    localStorage.setItem(STORAGE.keysVisibility, visible ? "show" : "hide");
+  const getKeysVisibility = () => load(S.keysVisibility, true) !== false;
+  const setKeysVisibility = (masked) => {
+    if (e.keysInput) e.keysInput.classList.toggle("masked", Boolean(masked));
+    if (e.toggleKeysBtn) e.toggleKeysBtn.textContent = masked ? "显示" : "隐藏";
+    save(S.keysVisibility, Boolean(masked));
   };
 
   const renderKeys = () => {
-    if (!keysInput || !keysSummary || !keyList) return;
-    const keys = loadKeys();
-    const invalidMap = syncInvalidKeys(keys);
-    const invalidCount = Object.keys(invalidMap).length;
-    keysInput.value = keys.join("\n");
-
-    if (keys.length === 0) {
-      keysSummary.textContent = "暂无 Key。";
-    } else {
-      const queue = buildKeyQueue(keys, invalidMap);
-      const nextKey = queue[0] || keys[0];
-      const invalidText = invalidCount ? `，失效 ${invalidCount} 个` : "";
-      const nextText = nextKey ? `，下一个：${maskKey(nextKey)}` : "";
-      keysSummary.textContent = `已保存 ${keys.length} 个 Key${invalidText}${nextText}`;
+    if (!e.keysInput || !e.keysSummary || !e.keyList) return;
+    const keys = getSavedKeys();
+    const invalid = getInvalidMap();
+    e.keysInput.value = keys.join("\n");
+    e.keyList.innerHTML = "";
+    if (!keys.length) {
+      e.keysSummary.textContent = "暂无 Key。";
+      return;
     }
+    const bad = Object.keys(invalid).length;
+    e.keysSummary.textContent = `已保存 ${keys.length} 个 Key${bad ? `，失效 ${bad} 个` : ""}`;
+    keys.forEach((key, i) => {
+      const row = document.createElement("div");
+      row.className = "key-pill";
+      const info = invalid[(key || "").trim()];
+      if (info) row.classList.add("invalid");
+      row.textContent = `Key ${i + 1}: ${mask(key)}${info?.reason ? `（${info.reason}）` : ""}`;
+      e.keyList.appendChild(row);
+    });
+  };
 
-    keyList.innerHTML = "";
-    keys.forEach((key, index) => {
-      const invalidInfo = invalidMap[key.trim()];
-      const pill = document.createElement("div");
-      pill.className = "key-pill";
-      if (invalidInfo) {
-        pill.classList.add("invalid");
-        const reason = invalidInfo.reason ? `（${invalidInfo.reason}）` : "（失效）";
-        pill.textContent = `Key ${index + 1}: ${maskKey(key)}${reason}`;
+  const renderUsage = () => {
+    const store = load(S.usage, {});
+    const today = new Date().toISOString().slice(0, 10);
+    const total = Object.values(store).reduce((sum, day) => sum + Number(day?.requests || 0), 0);
+    if (e.usageTotalSummary) e.usageTotalSummary.textContent = total ? `累计使用次数：${total}` : "暂无使用记录。";
+    if (e.usageTodaySummary && e.usageTodayList) {
+      e.usageTodayList.innerHTML = "";
+      const item = store[today];
+      if (!item) {
+        e.usageTodaySummary.textContent = "今天还没有记录。";
       } else {
-        pill.textContent = `Key ${index + 1}: ${maskKey(key)}`;
+        e.usageTodaySummary.textContent = `今天使用次数：${item.requests || 0}`;
+        const entries = Object.entries(item.perKey || {});
+        if (!entries.length) {
+          const row = document.createElement("div");
+          row.className = "usage-row";
+          row.textContent = "暂无 Key 维度数据。";
+          e.usageTodayList.appendChild(row);
+        } else {
+          entries.forEach(([k, v]) => {
+            const row = document.createElement("div");
+            row.className = "usage-row";
+            row.textContent = `${k} · ${v?.requests || 0} 次`;
+            e.usageTodayList.appendChild(row);
+          });
+        }
       }
-      keyList.appendChild(pill);
-    });
-  };
-
-  const getDayKey = (date) => date.toISOString().slice(0, 10);
-
-  const ZOOM_STEPS = [6, 12, 24, 48, 72, 168];
-
-  const normalizeZoomHours = (value) => {
-    if (ZOOM_STEPS.includes(value)) return value;
-    if (!Number.isFinite(value)) return 24;
-    let closest = ZOOM_STEPS[0];
-    let minDiff = Math.abs(value - closest);
-    ZOOM_STEPS.forEach((step) => {
-      const diff = Math.abs(value - step);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = step;
-      }
-    });
-    return closest;
-  };
-
-  const loadChartWindow = () => {
-    const raw = Number.parseInt(localStorage.getItem(STORAGE.chartZoom) || "", 10);
-    return normalizeZoomHours(raw);
-  };
-
-  let chartWindowHours = loadChartWindow();
-
-  const updateChartControls = () => {
-    if (chartRangeLabel) {
-      chartRangeLabel.textContent = `近${chartWindowHours}小时`;
     }
-  };
-
-  const loadUsageStore = () => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE.usage) || "{}");
-    } catch (error) {
-      return {};
-    }
-  };
-
-  const sumUsage = (store) => {
-    return Object.values(store).reduce(
-      (acc, day) => {
-        acc.requests += day?.requests || 0;
-        acc.tokens += day?.tokens || 0;
-        return acc;
-      },
-      { requests: 0, tokens: 0 }
-    );
-  };
-
-  const renderUsageTotal = (store) => {
-    if (!usageTotalSummary) return;
-    const total = sumUsage(store);
-    if (total.requests === 0) {
-      usageTotalSummary.textContent = "暂无使用记录。";
-      return;
-    }
-    usageTotalSummary.textContent = `累计使用次数：${total.requests}`;
-  };
-
-  const renderUsageToday = (store) => {
-    if (!usageTodaySummary || !usageTodayList) return;
-    usageTodayList.innerHTML = "";
-    const dayKey = getDayKey(new Date());
-    const today = store[dayKey];
-    if (!today) {
-      usageTodaySummary.textContent = "今天还没有记录。";
-      return;
-    }
-    usageTodaySummary.textContent = `今天使用次数：${today.requests}`;
-
-    Object.entries(today.perKey || {}).forEach(([key, stats]) => {
-      const row = document.createElement("div");
-      row.className = "usage-row";
-      row.textContent = `${key} · ${stats.requests} 次`;
-      usageTodayList.appendChild(row);
-    });
-  };
-
-  const renderUsageHistory = (store) => {
-    if (!usageHistorySummary || !usageHistoryList) return;
-    usageHistoryList.innerHTML = "";
-    const todayKey = getDayKey(new Date());
-    const keys = Object.keys(store)
-      .filter((key) => key !== todayKey)
-      .sort()
-      .reverse();
-    const hasToday = Boolean(store[todayKey]);
-    const listKeys = keys.length ? keys : hasToday ? [todayKey] : [];
-
-    if (listKeys.length === 0) {
-      usageHistorySummary.textContent = "暂无历史记录。";
-      drawUsageChart(store);
-      return;
-    }
-
-    if (keys.length === 0 && hasToday) {
-      usageHistorySummary.textContent = "仅有今天记录。";
-    } else {
-      usageHistorySummary.textContent = `历史天数：${keys.length}`;
-    }
-    listKeys.forEach((key) => {
-      const day = store[key] || { requests: 0 };
-      const row = document.createElement("div");
-      row.className = "usage-row";
-      const suffix = key === todayKey ? "（今天）" : "";
-      row.textContent = `${key} · ${day.requests} 次${suffix}`;
-      usageHistoryList.appendChild(row);
-    });
-
-    drawUsageChart(store);
-  };
-
-  const getChartColors = () => {
-    const styles = getComputedStyle(document.body);
-    return {
-      ink: styles.getPropertyValue("--ink").trim() || "#101113",
-      line: styles.getPropertyValue("--line").trim() || "rgba(16,17,19,0.12)",
-      accent: styles.getPropertyValue("--accent-2").trim() || "#d4d4d8",
-    };
-  };
-
-  const resolveChartSize = () => {
-    const rect = usageChart.getBoundingClientRect();
-    const cssWidth = rect.width || usageChart.clientWidth || 640;
-    const cssHeight = rect.height || usageChart.clientHeight || 160;
-    return {
-      width: cssWidth > 0 ? cssWidth : 640,
-      height: cssHeight > 0 ? cssHeight : 160,
-    };
-  };
-
-  const buildHourlySeries = (store, hours) => {
-    const now = new Date();
-    const totalHours = Math.max(1, hours);
-    const points = [];
-    for (let i = totalHours - 1; i >= 0; i -= 1) {
-      const time = new Date(now.getTime() - i * 60 * 60 * 1000);
-      const dayKey = getDayKey(time);
-      const hourKey = String(time.getHours()).padStart(2, "0");
-      const value = store?.[dayKey]?.perHour?.[hourKey] || 0;
-      points.push({
-        label: `${hourKey}:00`,
-        value,
+    if (e.usageHistorySummary && e.usageHistoryList) {
+      e.usageHistoryList.innerHTML = "";
+      const days = Object.keys(store).sort().reverse();
+      e.usageHistorySummary.textContent = days.length ? `历史天数：${days.length}` : "暂无历史记录。";
+      days.forEach((day) => {
+        const row = document.createElement("div");
+        row.className = "usage-row";
+        row.textContent = `${day} · ${store[day]?.requests || 0} 次`;
+        e.usageHistoryList.appendChild(row);
       });
     }
-    return points;
   };
 
-  const drawUsageChart = (store) => {
-    if (!usageChart || !usageChart.getContext) return;
-    const ctx = usageChart.getContext("2d");
-    if (!ctx) return;
-
-    const points = buildHourlySeries(store, chartWindowHours);
-
-    const { width, height } = resolveChartSize();
-    const dpr = window.devicePixelRatio || 1;
-    usageChart.width = Math.max(1, Math.floor(width * dpr));
-    usageChart.height = Math.max(1, Math.floor(height * dpr));
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, width, height);
-
-    if (points.length === 0) return;
-    usageChart.hidden = false;
-    const colors = getChartColors();
-    const padding = 16;
-    const maxValue = Math.max(...points.map((p) => p.value), 1);
-    const minValue = 0;
-    const xStep = points.length > 1
-      ? (width - padding * 2) / (points.length - 1)
-      : 0;
-    const yScale = (height - padding * 2) / (maxValue - minValue || 1);
-
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padding, height - padding);
-    ctx.lineTo(width - padding, height - padding);
-    ctx.stroke();
-
-    ctx.strokeStyle = colors.ink;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      const x = padding + index * xStep;
-      const y = height - padding - (point.value - minValue) * yScale;
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
-    ctx.stroke();
-
-    ctx.fillStyle = colors.ink;
-    points.forEach((point, index) => {
-      const x = padding + index * xStep;
-      const y = height - padding - (point.value - minValue) * yScale;
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
+  const setUsageTab = (name) => {
+    e.usageTabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.usageTab === name));
+    e.usagePanels.forEach((panel) => {
+      panel.hidden = panel.dataset.usagePanel !== name;
     });
   };
-
-  const setChartWindow = (hours) => {
-    chartWindowHours = normalizeZoomHours(hours);
-    localStorage.setItem(STORAGE.chartZoom, String(chartWindowHours));
-    updateChartControls();
-    refreshUsageChart();
-  };
-
-  const getZoomIndex = () => ZOOM_STEPS.indexOf(chartWindowHours);
-
-  const zoomIn = () => {
-    const idx = getZoomIndex();
-    if (idx > 0) {
-      setChartWindow(ZOOM_STEPS[idx - 1]);
-    }
-  };
-
-  const zoomOut = () => {
-    const idx = getZoomIndex();
-    if (idx >= 0 && idx < ZOOM_STEPS.length - 1) {
-      setChartWindow(ZOOM_STEPS[idx + 1]);
-    }
-  };
-
-  const renderUsageAll = () => {
-    const store = loadUsageStore();
-    renderUsageTotal(store);
-    renderUsageToday(store);
-    renderUsageHistory(store);
-  };
-
-  const refreshUsageChart = () => {
-    if (!usageChart) return;
-    updateChartControls();
-    const store = loadUsageStore();
-    drawUsageChart(store);
-  };
-
-  function renderHistorySummary() {
-    if (!historySummary) return;
-    if (!authState.user) {
-      historySummary.textContent = "请先登录后查看历史记录。";
-      return;
-    }
-    fetchJson("/api/history/summary").then((result) => {
-      if (!result.ok) {
-        historySummary.textContent = result.message || "历史记录读取失败。";
-        return;
-      }
-      const count = Number(result.data?.count || 0);
-      historySummary.textContent = count
-        ? `已保存 ${count} 条历史记录。`
-        : "暂无历史记录。";
-    });
-  }
-
-  const openModal = (modal) => {
-    if (!modal) return;
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
+  const openUsage = () => {
+    if (!e.usageModal) return;
+    e.usageModal.classList.add("is-open");
+    e.usageModal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
+    setUsageTab("today");
+    renderUsage();
   };
-
-  const closeModal = (modal) => {
-    if (!modal) return;
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
+  const closeUsage = () => {
+    if (!e.usageModal) return;
+    e.usageModal.classList.remove("is-open");
+    e.usageModal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("modal-open");
   };
 
-  const setActiveUsageTab = (name) => {
-    usageTabs.forEach((tab) => {
-      const active = tab.dataset.usageTab === name;
-      tab.classList.toggle("is-active", active);
-    });
-    usagePanels.forEach((panel) => {
-      panel.hidden = panel.dataset.usagePanel !== name;
-    });
-    if (name === "history") {
-      window.requestAnimationFrame(() => {
-        refreshUsageChart();
-      });
+  const renderAuth = () => {
+    if (!e.authStatus) return;
+    if (!state.user) {
+      e.authStatus.textContent = "未登录";
+      if (e.loginBtn) e.loginBtn.hidden = false;
+      if (e.registerBtn) e.registerBtn.hidden = false;
+      if (e.logoutBtn) e.logoutBtn.hidden = true;
+      if (e.authEmail) e.authEmail.disabled = false;
+      if (e.authPassword) e.authPassword.disabled = false;
+      return;
+    }
+    e.authStatus.textContent = `已登录：${state.user.email}（${state.user.role || "user"}）`;
+    if (e.loginBtn) e.loginBtn.hidden = true;
+    if (e.registerBtn) e.registerBtn.hidden = true;
+    if (e.logoutBtn) e.logoutBtn.hidden = false;
+    if (e.authEmail) {
+      e.authEmail.value = state.user.email || "";
+      e.authEmail.disabled = true;
+    }
+    if (e.authPassword) {
+      e.authPassword.value = "";
+      e.authPassword.disabled = true;
     }
   };
 
-  if (loginBtn) {
-    loginBtn.addEventListener("click", () => {
-      submitAuth("login");
+  const normalizeDb = (v) => (Number.isFinite(v) ? (Math.max(-120, Math.min(0, v)) + 120) / 120 : 0);
+  const buildVoiceVector = (frames) => {
+    if (!frames.length) return [];
+    const bands = 16;
+    const mean = new Array(bands).fill(0);
+    const dev = new Array(bands).fill(0);
+    frames.forEach((frame) => {
+      const step = Math.max(1, Math.floor(frame.length / bands));
+      for (let b = 0; b < bands; b += 1) {
+        const st = b * step;
+        const ed = b === bands - 1 ? frame.length : Math.min(frame.length, (b + 1) * step);
+        let acc = 0;
+        for (let i = st; i < ed; i += 1) acc += normalizeDb(frame[i]);
+        mean[b] += acc / Math.max(1, ed - st);
+      }
     });
-  }
-
-  if (registerBtn) {
-    registerBtn.addEventListener("click", () => {
-      submitAuth("register");
+    for (let i = 0; i < bands; i += 1) mean[i] /= frames.length;
+    frames.forEach((frame) => {
+      const step = Math.max(1, Math.floor(frame.length / bands));
+      for (let b = 0; b < bands; b += 1) {
+        const st = b * step;
+        const ed = b === bands - 1 ? frame.length : Math.min(frame.length, (b + 1) * step);
+        let acc = 0;
+        for (let i = st; i < ed; i += 1) acc += normalizeDb(frame[i]);
+        const avg = acc / Math.max(1, ed - st);
+        dev[b] += (avg - mean[b]) * (avg - mean[b]);
+      }
     });
-  }
+    for (let i = 0; i < bands; i += 1) dev[i] = Math.sqrt(dev[i] / Math.max(1, frames.length - 1));
+    const vec = [...mean, ...dev];
+    const norm = Math.sqrt(vec.reduce((s, x) => s + x * x, 0)) || 1;
+    return vec.map((x) => Number((x / norm).toFixed(6)));
+  };
+  const getVoicePayload = () =>
+    state.voice.local?.vector?.length
+      ? {
+          algorithm: "webaudio-v1",
+          vector: state.voice.local.vector,
+          sampleRate: state.voice.local.sampleRate,
+          frameCount: state.voice.local.frameCount,
+          capturedAt: state.voice.local.capturedAt,
+        }
+      : null;
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-      setAuthMessage("正在退出...");
-      const result = await fetchJson("/api/auth/logout", { method: "POST" });
-      if (!result.ok) {
-        setAuthMessage(result.message || "退出失败。", "error");
+  const renderVoice = () => {
+    const loggedIn = Boolean(state.user);
+    if (e.voiceRecordBtn) {
+      e.voiceRecordBtn.disabled = state.voice.recording || !state.voice.supported;
+      e.voiceRecordBtn.textContent = state.voice.recording
+        ? "录制中..."
+        : state.voice.local?.vector?.length
+          ? "重新录制声纹"
+          : "录制声纹";
+    }
+    if (e.voiceSaveBtn) {
+      e.voiceSaveBtn.hidden = !loggedIn || !state.voice.apiOk;
+      e.voiceSaveBtn.disabled = state.voice.recording || !state.voice.local?.vector?.length;
+    }
+    if (e.voiceClearBtn) {
+      e.voiceClearBtn.hidden = !loggedIn || !state.voice.apiOk;
+      e.voiceClearBtn.disabled = state.voice.recording;
+    }
+    if (e.voiceBadge) {
+      e.voiceBadge.textContent = state.voice.recording
+        ? "录制中"
+        : state.voice.local?.vector?.length
+          ? "已录制"
+          : state.voice.enrolled
+            ? "已保存"
+            : "未录制";
+    }
+  };
+
+  const renderAdmin = () => {
+    if (!e.adminConsole) return;
+    if (!isAdmin()) {
+      e.adminConsole.hidden = true;
+      tone(e.adminConsoleStatus, "仅管理员可见。");
+      return;
+    }
+    e.adminConsole.hidden = false;
+    tone(e.adminConsoleStatus, "你当前是管理员，可管理全局 API 与用户。", "success");
+  };
+
+  const renderHistorySummary = async () => {
+    if (!e.historySummary) return;
+    if (!state.user) {
+      e.historySummary.textContent = "请先登录后查看历史记录。";
+      return;
+    }
+    const r = await fetchJson("/api/history/summary");
+    if (!r.ok) {
+      if (r.status === 401) setUser(null);
+      e.historySummary.textContent = r.message || "读取历史统计失败。";
+      return;
+    }
+    const count = Number(r.data?.count || 0);
+    e.historySummary.textContent = count ? `当前账号共有 ${count} 条历史记录。` : "暂无历史记录。";
+  };
+
+  const setUser = (u) => {
+    state.user = u || null;
+    renderAuth();
+    renderVoice();
+    renderAdmin();
+    renderHistorySummary();
+    if (isAdmin()) {
+      refreshUnified();
+      refreshAdminUsers();
+    }
+    window.dispatchEvent(new CustomEvent("auth-changed", { detail: state.user }));
+  };
+
+  const refreshAuth = async () => {
+    const r = await fetchJson("/api/auth/me");
+    if (!r.ok) {
+      setUser(null);
+      return null;
+    }
+    const user = r.data?.user || null;
+    setUser(user);
+    return user;
+  };
+
+  const refreshVoiceStatus = async () => {
+    if (!e.voiceStatus) return;
+    if (!state.voice.supported) {
+      state.voice.apiOk = false;
+      state.voice.enrolled = false;
+      tone(e.voiceStatus, "当前浏览器不支持声纹录制。", "warn");
+      renderVoice();
+      return;
+    }
+    if (!state.user) {
+      state.voice.apiOk = true;
+      state.voice.enrolled = false;
+      tone(e.voiceStatus, state.voice.local?.vector?.length ? "已录制本地声纹，登录/注册会自动附带。" : "可选录制声纹，登录/注册会自动附带。");
+      renderVoice();
+      return;
+    }
+    const r = await fetchJson("/api/auth/voiceprint/status");
+    if (!r.ok) {
+      if (isApiUnavailable(r.status)) {
+        state.voice.apiOk = false;
+        state.voice.enrolled = false;
+        tone(e.voiceStatus, "后端未开启账号声纹管理接口，仅支持登录/注册时附带声纹。", "warn");
+      } else {
+        state.voice.apiOk = true;
+        tone(e.voiceStatus, r.message || "读取声纹状态失败。", "warn");
+      }
+      renderVoice();
+      return;
+    }
+    state.voice.apiOk = true;
+    state.voice.enrolled = Boolean(r.data?.enrolled || r.data?.enabled || r.data?.hasVoiceprint);
+    tone(e.voiceStatus, state.voice.enrolled ? "当前账号已启用声纹。" : "当前账号尚未启用声纹。", state.voice.enrolled ? "success" : "");
+    renderVoice();
+  };
+
+  const recordVoice = async () => {
+    if (state.voice.recording || !state.voice.supported) return;
+    state.voice.recording = true;
+    renderVoice();
+    tone(e.voiceStatus, "正在录制声纹，请持续说话约 3 秒...");
+    let stream = null;
+    let ctx = null;
+    let src = null;
+    let an = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      if (ctx.state === "suspended") await ctx.resume();
+      src = ctx.createMediaStreamSource(stream);
+      an = ctx.createAnalyser();
+      an.fftSize = 2048;
+      an.smoothingTimeConstant = 0.82;
+      src.connect(an);
+      const data = new Float32Array(an.frequencyBinCount);
+      const frames = [];
+      const begin = performance.now();
+      while (performance.now() - begin < 2600) {
+        an.getFloatFrequencyData(data);
+        frames.push(data.slice(6, 220));
+        await sleep(60);
+      }
+      const vector = buildVoiceVector(frames);
+      if (!vector.length) throw new Error("声纹提取失败，请重试。");
+      state.voice.local = { vector, sampleRate: ctx.sampleRate, frameCount: frames.length, capturedAt: new Date().toISOString() };
+      tone(e.voiceStatus, "声纹录制完成。", "success");
+    } catch (err) {
+      tone(e.voiceStatus, err?.message || "录制失败，请检查麦克风权限。", "error");
+    } finally {
+      if (src) src.disconnect();
+      if (an) an.disconnect();
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      if (ctx) await ctx.close().catch(() => {});
+      state.voice.recording = false;
+      renderVoice();
+    }
+  };
+
+  const renderAdminUsers = (items) => {
+    if (!e.adminUsersList) return;
+    e.adminUsersList.innerHTML = "";
+    if (!items.length) {
+      e.adminUsersList.innerHTML = '<div class="history-empty">暂无用户数据</div>';
+      return;
+    }
+    items.forEach((u) => {
+      const card = document.createElement("div");
+      card.className = "admin-user-card";
+      card.dataset.userId = String(u.id);
+      card.innerHTML = `
+        <div class="admin-user-header"><strong>ID ${u.id} · ${escapeHtml(u.email || "")}</strong><span class="pill subtle">${u.role === "admin" ? "管理员" : "普通用户"}</span></div>
+        <div class="hint">历史 ${Number(u.historyCount || 0)} 条 · 声纹 ${u.voiceprintEnabled ? "已启用" : "未启用"} · 创建时间 ${escapeHtml(fmt(u.createdAt))}</div>
+        <label class="field"><span>邮箱</span><input class="admin-user-email" value="${escapeHtml(u.email || "")}" /></label>
+        <label class="field"><span>角色</span><select class="admin-user-role"><option value="user"${u.role === "user" ? " selected" : ""}>普通用户</option><option value="admin"${u.role === "admin" ? " selected" : ""}>管理员</option></select></label>
+        <label class="field"><span>重置密码（可选）</span><input class="admin-user-password" type="password" placeholder="不填则不改" /></label>
+        <div class="panel-actions admin-user-actions"><button type="button" class="admin-user-save">保存修改</button><button type="button" class="ghost admin-user-clear-history">清空历史</button><button type="button" class="ghost admin-user-clear-voice">清除声纹</button><button type="button" class="ghost admin-user-view-history">查看历史</button></div>
+        <div class="hint admin-user-status">可编辑该用户信息。</div><pre class="admin-user-history" hidden></pre>`;
+      e.adminUsersList.appendChild(card);
+    });
+  };
+
+  const refreshUnified = async () => {
+    if (!isAdmin()) return;
+    tone(e.unifiedApiStatus, "正在读取统一 API 状态...");
+    const r = await fetchJson("/api/admin/unified-api");
+    if (!r.ok) {
+      tone(e.unifiedApiStatus, r.message || "读取失败。", "error");
+      return;
+    }
+    if (r.data?.hasKey) tone(e.unifiedApiStatus, `已配置：${r.data?.masked || "已配置"}`, "success");
+    else tone(e.unifiedApiStatus, "当前未配置统一 API Key。");
+  };
+
+  const refreshAdminUsers = async () => {
+    if (!isAdmin()) return;
+    tone(e.adminUsersStatus, "正在读取用户列表...");
+    const r = await fetchJson("/api/admin/users");
+    if (!r.ok) {
+      tone(e.adminUsersStatus, r.message || "读取失败。", "error");
+      return;
+    }
+    const items = Array.isArray(r.data?.items) ? r.data.items : [];
+    renderAdminUsers(items);
+    tone(e.adminUsersStatus, `共 ${items.length} 个账号。`, "success");
+  };
+
+  if (e.loginBtn) e.loginBtn.addEventListener("click", async () => {
+    const email = (e.authEmail?.value || "").trim();
+    const password = (e.authPassword?.value || "").trim();
+    if (!email || !password) return setAuthMessage("请输入邮箱和密码。", "error");
+    const body = { email, password };
+    const voice = getVoicePayload();
+    if (voice) body.voiceprint = voice;
+    setAuthMessage("正在登录...");
+    const r = await fetchJson("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) return setAuthMessage(r.message || "登录失败。", "error");
+    if (e.authPassword) e.authPassword.value = "";
+    setAuthMessage("登录成功。", "success");
+    setUser(r.data?.user || null);
+    refreshVoiceStatus();
+  });
+
+  if (e.registerBtn) e.registerBtn.addEventListener("click", async () => {
+    const email = (e.authEmail?.value || "").trim();
+    const password = (e.authPassword?.value || "").trim();
+    if (!email || !password) return setAuthMessage("请输入邮箱和密码。", "error");
+    const body = { email, password };
+    const voice = getVoicePayload();
+    if (voice) body.voiceprint = voice;
+    setAuthMessage("正在注册...");
+    const r = await fetchJson("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) return setAuthMessage(r.message || "注册失败。", "error");
+    if (e.authPassword) e.authPassword.value = "";
+    setAuthMessage("注册成功，已自动登录。", "success");
+    setUser(r.data?.user || null);
+    refreshVoiceStatus();
+  });
+
+  if (e.authPassword) e.authPassword.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && e.loginBtn && !e.loginBtn.hidden) e.loginBtn.click();
+  });
+
+  if (e.logoutBtn) e.logoutBtn.addEventListener("click", async () => {
+    const r = await fetchJson("/api/auth/logout", { method: "POST" });
+    if (!r.ok) return setAuthMessage(r.message || "退出失败。", "error");
+    setAuthMessage("已退出登录。");
+    setUser(null);
+    window.dispatchEvent(new Event("history-updated"));
+  });
+
+  if (e.voiceRecordBtn) e.voiceRecordBtn.addEventListener("click", recordVoice);
+  if (e.voiceSaveBtn) e.voiceSaveBtn.addEventListener("click", async () => {
+    if (!state.user) return;
+    if (!state.voice.apiOk) return tone(e.voiceStatus, "当前后端未开启声纹保存接口。", "warn");
+    const voice = getVoicePayload();
+    if (!voice) return tone(e.voiceStatus, "请先录制声纹。", "error");
+    const r = await fetchJson("/api/auth/voiceprint/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voiceprint: voice }) });
+    if (!r.ok) return tone(e.voiceStatus, r.message || "保存失败。", "error");
+    state.voice.enrolled = true;
+    tone(e.voiceStatus, "声纹已保存。", "success");
+    renderVoice();
+  });
+  if (e.voiceClearBtn) e.voiceClearBtn.addEventListener("click", async () => {
+    state.voice.local = null;
+    if (!state.user || !state.voice.apiOk) {
+      state.voice.enrolled = false;
+      tone(e.voiceStatus, "本地声纹已清除。", "success");
+      renderVoice();
+      return;
+    }
+    const r = await fetchJson("/api/auth/voiceprint", { method: "DELETE" });
+    if (!r.ok) return tone(e.voiceStatus, r.message || "清除失败。", "error");
+    state.voice.enrolled = false;
+    tone(e.voiceStatus, "声纹已清除。", "success");
+    renderVoice();
+  });
+
+  if (e.saveKeysBtn) e.saveKeysBtn.addEventListener("click", () => {
+    const keys = String(e.keysInput?.value || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    save(S.keys, keys);
+    const invalid = getInvalidMap();
+    const nextInvalid = {};
+    keys.forEach((k) => {
+      if (invalid[k]) nextInvalid[k] = invalid[k];
+    });
+    save(S.invalidKeys, nextInvalid);
+    const idx = Number.parseInt(localStorage.getItem(S.keyIndex) || "0", 10);
+    if (!keys.length || idx >= keys.length || idx < 0 || !Number.isInteger(idx)) localStorage.setItem(S.keyIndex, "0");
+    renderKeys();
+    setAuthMessage("Key 已保存。");
+  });
+
+  if (e.clearKeysBtn) e.clearKeysBtn.addEventListener("click", () => {
+    save(S.keys, []);
+    save(S.invalidKeys, {});
+    localStorage.setItem(S.keyIndex, "0");
+    if (e.keysInput) e.keysInput.value = "";
+    renderKeys();
+    setAuthMessage("Key 已清空。");
+    window.dispatchEvent(new Event("keys-status-changed"));
+  });
+
+  if (e.toggleKeysBtn) e.toggleKeysBtn.addEventListener("click", () => {
+    setKeysVisibility(!(e.keysInput?.classList.contains("masked")));
+  });
+
+  if (e.openUsageBtn) e.openUsageBtn.addEventListener("click", openUsage);
+  document.querySelectorAll('[data-close="usage"]').forEach((btn) => btn.addEventListener("click", closeUsage));
+  e.usageTabs.forEach((tab) =>
+    tab.addEventListener("click", () => {
+      setUsageTab(tab.dataset.usageTab || "today");
+    })
+  );
+
+  if (e.clearHistoryBtn) e.clearHistoryBtn.addEventListener("click", async () => {
+    if (!state.user) {
+      setAuthMessage("请先登录后再清空历史记录。", "error");
+      window.dispatchEvent(new CustomEvent("auth-required", { detail: { message: "请先登录后使用。" } }));
+      return;
+    }
+    const r = await fetchJson("/api/history", { method: "DELETE" });
+    if (!r.ok) return setAuthMessage(r.message || "清空失败。", "error");
+    setAuthMessage("历史记录已清空。", "success");
+    renderHistorySummary();
+    window.dispatchEvent(new Event("history-updated"));
+  });
+
+  if (e.saveUnifiedApiBtn) e.saveUnifiedApiBtn.addEventListener("click", async () => {
+    if (!isAdmin()) return;
+    const apiKey = (e.unifiedApiKeyInput?.value || "").trim();
+    if (!apiKey) return tone(e.unifiedApiStatus, "请输入统一 API Key。", "error");
+    const r = await fetchJson("/api/admin/unified-api", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey }) });
+    if (!r.ok) return tone(e.unifiedApiStatus, r.message || "保存失败。", "error");
+    if (e.unifiedApiKeyInput) e.unifiedApiKeyInput.value = "";
+    tone(e.unifiedApiStatus, "统一 API Key 已保存。", "success");
+    refreshUnified();
+  });
+
+  if (e.clearUnifiedApiBtn) e.clearUnifiedApiBtn.addEventListener("click", async () => {
+    if (!isAdmin()) return;
+    const r = await fetchJson("/api/admin/unified-api", { method: "DELETE" });
+    if (!r.ok) return tone(e.unifiedApiStatus, r.message || "清空失败。", "error");
+    tone(e.unifiedApiStatus, "统一 API Key 已清空。", "success");
+    refreshUnified();
+  });
+
+  if (e.refreshAdminUsersBtn) e.refreshAdminUsersBtn.addEventListener("click", refreshAdminUsers);
+
+  if (e.adminUsersList) e.adminUsersList.addEventListener("click", async (ev) => {
+    const card = ev.target.closest(".admin-user-card");
+    if (!card) return;
+    const userId = Number.parseInt(card.dataset.userId || "", 10);
+    if (!Number.isInteger(userId) || userId <= 0) return;
+    const status = card.querySelector(".admin-user-status");
+
+    if (ev.target.closest(".admin-user-save")) {
+      const email = (card.querySelector(".admin-user-email")?.value || "").trim();
+      const role = card.querySelector(".admin-user-role")?.value || "user";
+      const password = (card.querySelector(".admin-user-password")?.value || "").trim();
+      const body = { email, role };
+      if (password) body.password = password;
+      tone(status, "正在保存...");
+      const r = await fetchJson(`/api/admin/users/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!r.ok) return tone(status, r.message || "保存失败。", "error");
+      if (card.querySelector(".admin-user-password")) card.querySelector(".admin-user-password").value = "";
+      tone(status, "保存成功。", "success");
+      await refreshAdminUsers();
+      if (state.user?.id === userId) await refreshAuth();
+      return;
+    }
+
+    if (ev.target.closest(".admin-user-clear-history")) {
+      tone(status, "正在清空该用户历史...");
+      const r = await fetchJson(`/api/admin/users/${userId}/history`, { method: "DELETE" });
+      if (!r.ok) return tone(status, r.message || "清空失败。", "error");
+      tone(status, "历史记录已清空。", "success");
+      await refreshAdminUsers();
+      return;
+    }
+
+    if (ev.target.closest(".admin-user-clear-voice")) {
+      tone(status, "正在清除该用户声纹...");
+      const r = await fetchJson(`/api/admin/users/${userId}/voiceprint`, { method: "DELETE" });
+      if (!r.ok) return tone(status, r.message || "清除声纹失败。", "error");
+      tone(status, "该用户声纹已清除。", "success");
+      await refreshAdminUsers();
+      return;
+    }
+
+    if (ev.target.closest(".admin-user-view-history")) {
+      const box = card.querySelector(".admin-user-history");
+      if (!box) return;
+      if (!box.hidden) {
+        box.hidden = true;
         return;
       }
-      setAuthUser(null);
-      setAuthMessage("已退出登录。");
-      window.dispatchEvent(new Event("history-updated"));
-    });
-  }
-
-  if (authPassword) {
-    authPassword.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      submitAuth("login");
-    });
-  }
-
-  if (saveKeysBtn) {
-    saveKeysBtn.addEventListener("click", () => {
-      const keys = parseKeys(keysInput.value);
-      saveKeys(keys);
-      renderKeys();
-    });
-  }
-
-  if (clearKeysBtn) {
-    clearKeysBtn.addEventListener("click", () => {
-      if (keysInput) {
-        keysInput.value = "";
-      }
-      saveKeys([]);
-      localStorage.setItem(STORAGE.keyIndex, "0");
-      saveInvalidKeys({});
-      renderKeys();
-    });
-  }
-
-  if (toggleKeysBtn) {
-    toggleKeysBtn.addEventListener("click", () => {
-      applyKeysVisibility(keysInput.classList.contains("masked"));
-    });
-  }
-
-  if (openUsageBtn) {
-    openUsageBtn.addEventListener("click", () => {
-      openModal(usageModal);
-      setActiveUsageTab("today");
-      renderUsageAll();
-    });
-  }
-
-  usageTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      setActiveUsageTab(tab.dataset.usageTab);
-    });
-  });
-
-  if (usageChart) {
-    usageChart.addEventListener(
-      "wheel",
-      (event) => {
-        event.preventDefault();
-        if (event.deltaY < 0) {
-          zoomIn();
-        } else {
-          zoomOut();
-        }
-      },
-      { passive: false }
-    );
-  }
-
-  document.querySelectorAll('[data-close="usage"]').forEach((btn) => {
-    btn.addEventListener("click", () => closeModal(usageModal));
-  });
-
-  window.addEventListener("keys-status-changed", () => {
-    renderKeys();
+      tone(status, "正在读取历史...");
+      const r = await fetchJson(`/api/admin/users/${userId}/history`);
+      if (!r.ok) return tone(status, r.message || "读取失败。", "error");
+      const items = Array.isArray(r.data?.items) ? r.data.items : [];
+      box.textContent = items.length
+        ? items.slice(0, 20).map((x, i) => `${i + 1}. [${fmt(x.time)}] ${String(x.prompt || "（无文本）").replace(/\s+/g, " ").slice(0, 120)}`).join("\n")
+        : "该用户暂无历史记录。";
+      box.hidden = false;
+      tone(status, `已加载 ${items.length} 条历史。`, "success");
+    }
   });
 
   window.addEventListener("history-updated", () => {
     renderHistorySummary();
+    renderUsage();
+  });
+  window.addEventListener("keys-status-changed", renderKeys);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && e.usageModal?.classList.contains("is-open")) closeUsage();
   });
 
-  if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener("click", async () => {
-      if (!authState.user) {
-        const message = "请先登录后再清空历史记录。";
-        setAuthMessage(message, "error");
-        window.dispatchEvent(
-          new CustomEvent("auth-required", { detail: { message } })
-        );
-        return;
-      }
-      setAuthMessage("正在清空历史记录...");
-      const result = await fetchJson("/api/history", { method: "DELETE" });
-      if (!result.ok) {
-        setAuthMessage(result.message || "清空失败。", "error");
-        return;
-      }
-      setAuthMessage("历史记录已清空。");
-      renderHistorySummary();
-      window.dispatchEvent(new Event("history-updated"));
-    });
-  }
-
   document.addEventListener("DOMContentLoaded", () => {
-    if (window.GeminiTheme?.setThemePreference) {
-      window.GeminiTheme.setThemePreference("system");
-    }
+    if (window.GeminiTheme?.setThemePreference) window.GeminiTheme.setThemePreference("system");
+    setKeysVisibility(getKeysVisibility());
     renderKeys();
-    renderUsageAll();
-    updateChartControls();
-    refreshAuth();
-    applyKeysVisibility(getKeysVisibility());
+    renderUsage();
+    renderVoice();
+    renderAdmin();
+    refreshAuth().then(refreshVoiceStatus).catch(() => setUser(null));
   });
 
   window.AISolverAuth = {
-    getUser: () => authState.user,
+    getUser: () => state.user,
     refresh: refreshAuth,
+    isAdmin,
   };
 })();
