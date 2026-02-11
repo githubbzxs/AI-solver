@@ -68,6 +68,11 @@
 
   const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
   const isAdmin = () => state.user?.role === "admin";
+  const resolveAccount = (user) => {
+    const account = String(user?.account || "").trim();
+    if (account) return account;
+    return String(user?.email || "").trim();
+  };
   const isApiUnavailable = (status) => status === 404 || status === 405 || status === 501;
   const load = (k, d) => {
     try {
@@ -227,12 +232,13 @@
       if (e.authPassword) e.authPassword.disabled = false;
       return;
     }
-    e.authStatus.textContent = `已登录：${state.user.email}（${state.user.role || "user"}）`;
+    const accountLabel = resolveAccount(state.user);
+    e.authStatus.textContent = `已登录：${accountLabel}（${state.user.role || "user"}）`;
     if (e.loginBtn) e.loginBtn.hidden = true;
     if (e.registerBtn) e.registerBtn.hidden = true;
     if (e.logoutBtn) e.logoutBtn.hidden = false;
     if (e.authEmail) {
-      e.authEmail.value = state.user.email || "";
+      e.authEmail.value = accountLabel;
       e.authEmail.disabled = true;
     }
     if (e.authPassword) {
@@ -457,9 +463,9 @@
       card.className = "admin-user-card";
       card.dataset.userId = String(u.id);
       card.innerHTML = `
-        <div class="admin-user-header"><strong>ID ${u.id} · ${escapeHtml(u.email || "")}</strong><span class="pill subtle">${u.role === "admin" ? "管理员" : "普通用户"}</span></div>
+        <div class="admin-user-header"><strong>ID ${u.id} · ${escapeHtml(resolveAccount(u))}</strong><span class="pill subtle">${u.role === "admin" ? "管理员" : "普通用户"}</span></div>
         <div class="hint">历史 ${Number(u.historyCount || 0)} 条 · 声纹 ${u.voiceprintEnabled ? "已启用" : "未启用"} · 创建时间 ${escapeHtml(fmt(u.createdAt))}</div>
-        <label class="field"><span>邮箱</span><input class="admin-user-email" value="${escapeHtml(u.email || "")}" /></label>
+        <label class="field"><span>账户</span><input class="admin-user-email" value="${escapeHtml(resolveAccount(u))}" /></label>
         <label class="field"><span>角色</span><select class="admin-user-role"><option value="user"${u.role === "user" ? " selected" : ""}>普通用户</option><option value="admin"${u.role === "admin" ? " selected" : ""}>管理员</option></select></label>
         <label class="field"><span>重置密码（可选）</span><input class="admin-user-password" type="password" placeholder="不填则不改" /></label>
         <div class="panel-actions admin-user-actions"><button type="button" class="admin-user-save">保存修改</button><button type="button" class="ghost admin-user-clear-history">清空历史</button><button type="button" class="ghost admin-user-clear-voice">清除声纹</button><button type="button" class="ghost admin-user-view-history">查看历史</button></div>
@@ -494,10 +500,10 @@
   };
 
   if (e.loginBtn) e.loginBtn.addEventListener("click", async () => {
-    const email = (e.authEmail?.value || "").trim();
+    const account = (e.authEmail?.value || "").trim();
     const password = (e.authPassword?.value || "").trim();
-    if (!email || !password) return setAuthMessage("请输入邮箱和密码。", "error");
-    const body = { email, password };
+    if (!account || !password) return setAuthMessage("请输入账户和密码。", "error");
+    const body = { account, email: account, password };
     const voice = getVoicePayload();
     if (voice) body.voiceprint = voice;
     setAuthMessage("正在登录...");
@@ -510,10 +516,10 @@
   });
 
   if (e.registerBtn) e.registerBtn.addEventListener("click", async () => {
-    const email = (e.authEmail?.value || "").trim();
+    const account = (e.authEmail?.value || "").trim();
     const password = (e.authPassword?.value || "").trim();
-    if (!email || !password) return setAuthMessage("请输入邮箱和密码。", "error");
-    const body = { email, password };
+    if (!account || !password) return setAuthMessage("请输入账户和密码。", "error");
+    const body = { account, email: account, password };
     const voice = getVoicePayload();
     if (voice) body.voiceprint = voice;
     setAuthMessage("正在注册...");
@@ -643,10 +649,10 @@
     const status = card.querySelector(".admin-user-status");
 
     if (ev.target.closest(".admin-user-save")) {
-      const email = (card.querySelector(".admin-user-email")?.value || "").trim();
+      const account = (card.querySelector(".admin-user-email")?.value || "").trim();
       const role = card.querySelector(".admin-user-role")?.value || "user";
       const password = (card.querySelector(".admin-user-password")?.value || "").trim();
-      const body = { email, role };
+      const body = { account, email: account, role };
       if (password) body.password = password;
       tone(status, "正在保存...");
       const r = await fetchJson(`/api/admin/users/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
