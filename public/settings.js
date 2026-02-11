@@ -247,7 +247,13 @@
     }
   };
 
-  const normalizeDb = (v) => (Number.isFinite(v) ? (Math.max(-120, Math.min(0, v)) + 120) / 120 : 0);
+  const MIN_VOICE_NORM = 1e-6;
+  const calcVoiceNorm = (vector) =>
+    Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  const normalizeDb = (value) => {
+    const safeValue = Number.isFinite(value) ? value : -120;
+    return (Math.max(-120, Math.min(0, safeValue)) + 120) / 120;
+  };
   const buildVoiceVector = (frames) => {
     if (!frames.length) return [];
     const bands = 16;
@@ -277,33 +283,41 @@
     });
     for (let i = 0; i < bands; i += 1) dev[i] = Math.sqrt(dev[i] / Math.max(1, frames.length - 1));
     const vec = [...mean, ...dev];
-    const norm = Math.sqrt(vec.reduce((s, x) => s + x * x, 0)) || 1;
+    const norm = calcVoiceNorm(vec);
+    if (!Number.isFinite(norm) || norm < MIN_VOICE_NORM) return [];
     return vec.map((x) => Number((x / norm).toFixed(6)));
   };
-  const getVoicePayload = () =>
-    state.voice.local?.vector?.length
-      ? {
-          algorithm: "webaudio-v1",
-          vector: state.voice.local.vector,
-          sampleRate: state.voice.local.sampleRate,
-          frameCount: state.voice.local.frameCount,
-          capturedAt: state.voice.local.capturedAt,
-        }
-      : null;
+  const hasValidVoiceVector = (vector) => {
+    if (!Array.isArray(vector) || vector.length === 0) return false;
+    if (vector.some((value) => !Number.isFinite(value))) return false;
+    return calcVoiceNorm(vector) >= MIN_VOICE_NORM;
+  };
+  const getVoicePayload = () => {
+    const vector = state.voice.local?.vector;
+    if (!hasValidVoiceVector(vector)) return null;
+    return {
+      algorithm: "webaudio-v1",
+      vector,
+      sampleRate: state.voice.local.sampleRate,
+      frameCount: state.voice.local.frameCount,
+      capturedAt: state.voice.local.capturedAt,
+    };
+  };
 
   const renderVoice = () => {
     const loggedIn = Boolean(state.user);
+    const hasLocalVoice = hasValidVoiceVector(state.voice.local?.vector);
     if (e.voiceRecordBtn) {
       e.voiceRecordBtn.disabled = state.voice.recording || !state.voice.supported;
       e.voiceRecordBtn.textContent = state.voice.recording
         ? "录制中..."
-        : state.voice.local?.vector?.length
+        : hasLocalVoice
           ? "重新录制声纹"
           : "录制声纹";
     }
     if (e.voiceSaveBtn) {
       e.voiceSaveBtn.hidden = !loggedIn || !state.voice.apiOk;
-      e.voiceSaveBtn.disabled = state.voice.recording || !state.voice.local?.vector?.length;
+      e.voiceSaveBtn.disabled = state.voice.recording || !hasLocalVoice;
     }
     if (e.voiceClearBtn) {
       e.voiceClearBtn.hidden = !loggedIn || !state.voice.apiOk;
@@ -312,7 +326,7 @@
     if (e.voiceBadge) {
       e.voiceBadge.textContent = state.voice.recording
         ? "录制中"
-        : state.voice.local?.vector?.length
+        : hasLocalVoice
           ? "已录制"
           : state.voice.enrolled
             ? "已保存"
@@ -383,7 +397,12 @@
     if (!state.user) {
       state.voice.apiOk = true;
       state.voice.enrolled = false;
-      tone(e.voiceStatus, state.voice.local?.vector?.length ? "已录制本地声纹，登录/注册会自动附带。" : "可选录制声纹，登录/注册会自动附带。");
+      tone(
+        e.voiceStatus,
+        hasValidVoiceVector(state.voice.local?.vector)
+          ? "已录制本地声纹，登录/注册会自动附带。"
+          : "可选录制声纹，登录/注册会自动附带。"
+      );
       renderVoice();
       return;
     }
@@ -415,6 +434,7 @@
     let ctx = null;
     let src = null;
     let an = null;
+    let mute = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -427,6 +447,11 @@
       an.fftSize = 2048;
       an.smoothingTimeConstant = 0.82;
       src.connect(an);
+      // 将分析节点接到静音输出，确保部分浏览器也会持续更新频谱数据。
+      mute = ctx.createGain();
+      mute.gain.value = 0;
+      an.connect(mute);
+      mute.connect(ctx.destination);
       const data = new Float32Array(an.frequencyBinCount);
       const frames = [];
       const begin = performance.now();
@@ -436,7 +461,9 @@
         await sleep(60);
       }
       const vector = buildVoiceVector(frames);
-      if (!vector.length) throw new Error("声纹提取失败，请重试。");
+      if (!vector.length) {
+        throw new Error("未检测到有效语音，请靠近麦克风并持续说话后重试。");
+      }
       state.voice.local = { vector, sampleRate: ctx.sampleRate, frameCount: frames.length, capturedAt: new Date().toISOString() };
       tone(e.voiceStatus, "声纹录制完成。", "success");
     } catch (err) {
@@ -444,6 +471,7 @@
     } finally {
       if (src) src.disconnect();
       if (an) an.disconnect();
+      if (mute) mute.disconnect();
       if (stream) stream.getTracks().forEach((t) => t.stop());
       if (ctx) await ctx.close().catch(() => {});
       state.voice.recording = false;
@@ -548,7 +576,7 @@
     if (!state.user) return;
     if (!state.voice.apiOk) return tone(e.voiceStatus, "当前后端未开启声纹保存接口。", "warn");
     const voice = getVoicePayload();
-    if (!voice) return tone(e.voiceStatus, "请先录制声纹。", "error");
+    if (!voice) return tone(e.voiceStatus, "请先录制有效声纹。", "error");
     const r = await fetchJson("/api/auth/voiceprint/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voiceprint: voice }) });
     if (!r.ok) return tone(e.voiceStatus, r.message || "保存失败。", "error");
     state.voice.enrolled = true;

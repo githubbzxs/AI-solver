@@ -76,6 +76,10 @@ const VOICEPRINT_MAX_DIMENSIONS = (() => {
   const raw = Number.parseInt(process.env.VOICEPRINT_MAX_DIMENSIONS || "4096", 10);
   return Number.isInteger(raw) && raw >= VOICEPRINT_MIN_DIMENSIONS ? raw : 4096;
 })();
+const VOICEPRINT_MIN_NORM = (() => {
+  const raw = Number.parseFloat(process.env.VOICEPRINT_MIN_NORM || "1e-6");
+  return Number.isFinite(raw) && raw > 0 ? raw : 1e-6;
+})();
 
 // multer 解析 multipart/form-data，内存存储便于直接转 base64
 const upload = multer({
@@ -320,6 +324,9 @@ const normalizeVoiceprintVector = (rawVoiceprint, options = {}) => {
   const norm = Math.sqrt(squareSum);
   if (!Number.isFinite(norm) || norm <= 0) {
     return { error: "声纹向量范数无效（不能全为 0）。" };
+  }
+  if (norm < VOICEPRINT_MIN_NORM) {
+    return { error: "声纹向量能量过低，请靠近麦克风并重新录制。" };
   }
 
   const normalized = vector.map((value) => Number((value / norm).toFixed(12)));
